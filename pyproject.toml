@@ -1,0 +1,16 @@
+[project]
+name = "edge"
+version = "0.0.1"
+description = "Short-horizon LOB prediction: microstructure baselines vs order-flow LM representations."
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "pyarrow>=14.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
