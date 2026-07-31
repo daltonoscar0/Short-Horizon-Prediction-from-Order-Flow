@@ -168,3 +168,20 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   committed and verified; the rerun owes only the adversary pass) through phase 2. The
   uncommitted feature spine from the killed phase-1 workflow is left in the tree for the
   rerun to inherit and verify rather than rewrite.
+- 2026-07-31 — Phase 0 closed out by hand after its rerun died to `API Error: Connection
+  closed mid-response` between writing the adversary reports and committing. All four
+  phase-0 adversary reports returned SURVIVED WITH CAVEATS (none KILLED), and the fixes the
+  dying session had already written to the tree were verified before committing: 80/80 tests
+  in the working tree, `make data` exit 0 now reporting `align_hold_rate=1.0000
+  (n_checked=4000)` on both tickers, and a fresh clone running 40 tests where it previously
+  ran 28. Committed as `1022005`, `09e2161`, `3836cdc`. The adversary's four "would change my
+  mind" conditions are carried forward, in particular that a Phase-1 number disagreeing with
+  a re-derivation from raw promotes findings 1/2/11 to blockers.
+- 2026-07-31 — `.edge-runs/state` set to 0 by hand rather than re-running phase 0 a third
+  time. The gate report records the milestone criteria as met and the run only died after
+  the adversary pass, so a rerun would repeat ~30 minutes of verified work; this is the write
+  `run_phase` would have made had the phase exited 0.
+- 2026-07-31 — Driver: a non-zero exit from the phase's `claude` invocation is now fatal.
+  It was unchecked, so the phase-0 API error was indistinguishable from success at the exit
+  code; only the missing state file revealed it. The adversary-report count guard does not
+  cover this case (that phase had written its reports before dying).
