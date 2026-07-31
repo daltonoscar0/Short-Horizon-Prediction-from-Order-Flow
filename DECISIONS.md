@@ -123,3 +123,48 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   functions: crossed/locked counting, sentinel rows, ts monotonicity and tie counting, gap
   ranking, price scaling, intraday binning, U-shape rule). `quality.py`'s docstring already
   claimed these were unit tested and they were not; suite is now 28 tests, all green.
+- 2026-07-30 — Stale test `tests/test_clocks.py::test_frozen_per_ticker_n` asserted the old
+  per-ticker `EVENT_CLOCK_N = {"INTC": 3, "AMZN": 1}` against the frozen scalar `10`, so the
+  suite was red (67/68). Rewritten as `test_frozen_single_n_for_both_tickers`, asserting the
+  scalar and asserting it is *not* a dict, so a silent revert to a per-ticker calibration
+  fails a test rather than passing quietly. Suite green at 68.
+- 2026-07-30 — Phase 2 was invoked with Phase 1 only half-built. The infra layer exists and
+  is good (`frame.py`, `book.py`, `clocks.py`, `windows.py`, `normalize.py`) but none of the
+  six family modules named in `src/edge/features/__init__.py`'s `FAMILY_PREFIXES` (ofi,
+  queue, microprice, trade, state, labels) had been written, there is no `features.parquet`,
+  and `docs/INTERFACE.md` — which four module docstrings already cite — does not exist. The
+  L0-L4 ladder is defined in terms of those features, so Phase 2's deliverable is
+  unreachable without them. Decision: build the remaining Phase 1 families as a prerequisite
+  block inside this run, scoped to exactly what `FEATURES.md` secs. 1-5 and 7 specify and no
+  further, then run Phase 2 on the result. Not treated as scope creep — the ladder table is
+  the Phase 2 milestone and features are its input — but Phase 1's own milestone (the
+  feature/label correlation table) is produced too so the phases stay separately auditable.
+- 2026-07-30 — Fold geometry under a one-day universe. `EVAL_PROTOCOL.md` sec. 1 says split
+  on day boundaries first and fall back to intraday blocks "if you need more folds"; the
+  free sample is a single session (2012-06-21) per ticker, so intraday blocks are the only
+  option, not a preference. Frozen rule, chosen a priori and not by looking at any fold:
+  expanding walk-forward, initial train = the first third of the session
+  (09:30:00-11:40:00), then **6 test blocks of 2600s** tiling 11:40:00-16:00:00 exactly.
+  Consequence recorded up front: `EVAL_PROTOCOL.md` sec. 5 detector 4 (same-day vs next-day)
+  **cannot be run** on this universe and will be reported as not-run rather than as passing.
+- 2026-07-30 — Purge/embargo parameters frozen from the protocol's own defaults, not tuned:
+  purge = h at both edges of every test block; embargo E = max(60s, 10*h), giving E = 100s
+  at the 10s horizon and 60s at 1s/2s/5s. E-sensitivity gets its own table rather than a
+  choice. These go in the RESULTS.md frozen-decisions table.
+- 2026-07-30 — GBM library: **LightGBM 4.7.0** (the one GBM permitted by CLAUDE.md's
+  dependency rule; xgboost/catboost are absent from the environment anyway). `scipy` is
+  present in the environment but is **not** on the permitted list, so the harness imports it
+  nowhere — Spearman IC, AUC, MCC, ridge, logistic and OLS are all hand-written on numpy.
+  `sklearn` is not installed at all, which makes the "no `sklearn.model_selection`" rule
+  structurally enforced rather than merely observed.
+- 2026-07-30 — Driver hardened after the first unattended run failed three ways. (1) Two
+  `drive.sh all` instances ran concurrently (20:18 background, 20:39 interactive) and raced
+  the working tree; a lock in `.edge-runs/lock` now refuses a second driver. (2) Headless
+  phase sessions launched their workflows in the background and the harness terminated them
+  at the 600s print ceiling, so phases 1-2 were marked complete with work half-landed; the
+  driver now exports `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`. (3) The adversary gate
+  treated an empty `reports/adversary/` as a pass; phases 0-4 now require a new adversary
+  report before the phase is marked complete. State reset to rerun from phase 0 (its code is
+  committed and verified; the rerun owes only the adversary pass) through phase 2. The
+  uncommitted feature spine from the killed phase-1 workflow is left in the tree for the
+  rerun to inherit and verify rather than rewrite.

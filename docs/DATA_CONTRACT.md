@@ -62,21 +62,42 @@ guarantee of the format.
 paired message file** (1-indexed both; 0-indexed in code, so array index `i` of the parsed
 table pairs message `i` with post-state row `i`).
 
-Convention authority: LOBSTER's data-structure page
-(https://data.lobsterdata.com/info/DataStructure.php) was unreachable from this environment
-throughout Phase 0 (serves an SPA shell / dead subdomain; no cached mirror reachable
-either), so the worked example there could not be quoted directly. In its place:
+Convention authority: sourced to the primary spec directly, not inferred from an empirical
+check alone. Two hosts are involved and both are dead *live*: `data.lobsterdata.com` does
+not resolve (dead subdomain), and the sibling live page
+`lobsterdata.com/info/DataStructure.php` serves only a 457-byte SPA shell with no content.
+A cached mirror of the latter *is* reachable, though — the Wayback Machine snapshot
+(https://web.archive.org/web/20240427184519/https://lobsterdata.com/info/DataStructure.php,
+HTTP 200, 30,950 bytes, captured 2024-04-27) has the full page, and states verbatim:
 
-1. **Empirical verification**, done before any adapter code was written: for a sampled
-   type-3 (full delete) message `k` with `size = S` at `(side, price)`, the displayed size
-   at that `(side, price)` in orderbook row `k-1` exceeds row `k` by exactly `S` (or the
-   level disappears entirely from row `k`, when the delete empties it). This held on
-   2000/2000 sampled type-3 deletes on each of INTC and AMZN; the inverted comparison
-   (row `k` vs row `k+1`) held on 0/2000. `tests/test_alignment.py` re-runs this at n=500+
-   per ticker against the live raw files as the executable version of this check
+> "The k-th row in the 'message' file describes the limit order event causing the change in
+> the limit order book from line k-1 to line k in the 'orderbook' file."
+
+— i.e. message `k` causes the change from orderbook row `k-1` to orderbook row `k`, so row
+`k` is the state *after* message `k`: exactly the convention above. The same page gives a
+worked example, reproduced here for the record: the type-3 delete on line 2 of its sample
+message file removes 100 shares from the ask side at price 118600; the paired orderbook
+file's line 1 -> 2 shows the level-1 ask volume dropping from 9484 to 9384 by exactly that
+amount.
+
+1. **Primary source**: the quoted sentence and worked example above (Wayback snapshot,
+   2024-04-27, as cited).
+2. **Empirical verification**, done independently before any adapter code was written, as
+   the executable check on this repo's actual data rather than the spec's toy rows: for a
+   sampled type-3 (full delete) message `k` with `size = S` at `(side, price)`, the
+   displayed size at that `(side, price)` in orderbook row `k-1` exceeds row `k` by exactly
+   `S` (or the level disappears entirely from row `k`, when the delete empties it). At
+   seed 0: the spec-direction comparison (row `k-1` vs row `k`) held on 500/500 sampled
+   type-3 deletes on each of INTC and AMZN (100%); the inverted comparison (row `k` vs row
+   `k+1`) held on only 110/2000 (5.5%) for INTC and 130/2000 (6.5%) for AMZN. A nonzero
+   inverted rate is expected — a level can coincidentally shrink by the same size across the
+   *next*, unrelated event too — which is why the inverted check uses a threshold rather
+   than asserting exactly 0; the ~100%-vs-~6% separation is what pins the convention down,
+   not the exact inverted rate. `tests/test_alignment.py` re-runs the spec-direction check
+   at n=500+ per ticker against the live raw files as the executable version of this check
    (`test_orderbook_row_is_state_after_message`), plus an explicit assertion that the
-   inverted direction does *not* hold on the same samples.
-2. **Independent confirmation**: `orderflow-lm`'s `SPEC.md` (Phase 2 tokenizer section)
+   inverted direction does *not* hold anywhere near as often on the same samples.
+3. **Independent confirmation**: `orderflow-lm`'s `SPEC.md` (Phase 2 tokenizer section)
    states the identical convention for the same data — "pre-event book = orderbook file row
    `i-1`" — derived independently for that project's tokenizer design.
 
