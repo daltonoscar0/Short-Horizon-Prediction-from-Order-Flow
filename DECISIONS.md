@@ -397,3 +397,36 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   stopping on a slice of the test fold is itself a leak, and carving a validation slice out of
   training is one more free parameter to log; a fixed round count is the honest choice and it
   is the same count under all three protocols.
+
+## Phase 3 — costs, fills, PnL
+
+- 2026-07-31 — Trading direction is the SIGN of the prediction, not a deadband on its
+  magnitude. The first cut reused the labels' 0.5-tick deadband as a trading threshold and
+  L0/L1/L1m/L2 then took ZERO trades across the entire session: a scaled sign predictor never
+  emits a magnitude above half a tick at a 1s horizon where 96% of realised moves are zero.
+  That left the break-even cost table — the phase's headline number — empty for exactly the
+  rungs it most needs to price, including L1, the baseline the whole project is trying to
+  beat. A deadband is a position-sizing choice, not part of the signal; it remains available
+  as a sensitivity and defaults to 0.
+- 2026-07-31 — Decision points are spaced at least `latency + horizon` apart, greedily from
+  the earliest eligible stamp. EVAL_PROTOCOL.md sec. 3 mandates "single unit, no inventory
+  accumulation, flat at horizon", and taking a decision at every stamp violates that outright:
+  on the 100ms calendar grid with a 1s horizon, ten positions would be open at once and the
+  reported PnL would be a leveraged overlapping sum rather than the boring single-unit
+  strategy the protocol specifies. This also makes the trade count an honest turnover measure.
+- 2026-07-31 — PnL is computed under PROTOCOL C ONLY. A PnL number under a leaky protocol is
+  not a weaker result, it is a misleading one, and phase 2 exists to establish which protocol
+  to believe. The A/B columns stay in the ladder table, where the gap is the subject.
+- 2026-07-31 — The 2012 Nasdaq take/make rates ($0.0030 / $0.0020 per share) are entered as an
+  ASSUMPTION and have NOT been verified against an archived price list; the exact tier depends
+  on a member firm's monthly volume, which no public dataset pins down for an anonymous
+  participant. Flagged in the module, the report header and METHOD.md rather than presented as
+  a citation. The break-even cost table is what makes this survivable: it reports the cost at
+  which PnL crosses zero, so a reader who disagrees reads their own answer off it.
+- 2026-07-31 — The classification columns in the ladder table are largely uninformative and
+  are labelled as such rather than quietly reported. Predictions are classified with the same
+  0.5-tick deadband as the labels, so a scaled sign predictor lands entirely in the flat class:
+  L1 shows balanced accuracy of exactly 1/3 with MCC undefined (a constant predictor has no
+  MCC). The regression metrics (R^2 vs zero, and IC) are the informative ones at these
+  horizons; fixing the classification treatment properly means a quantile-based threshold and
+  is left as future work rather than bolted on late.

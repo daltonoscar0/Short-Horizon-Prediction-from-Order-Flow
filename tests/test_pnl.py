@@ -181,3 +181,44 @@ class TestTurnover(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNonOverlappingDecisions(unittest.TestCase):
+    """EVAL_PROTOCOL.md sec. 3: single unit, no inventory accumulation, flat at horizon."""
+
+    def test_positions_never_overlap_on_a_regular_grid(self):
+        from edge.costs.run import _non_overlapping
+
+        # Stamps 100ms apart, horizon 1s, latency 0 -> a position opened at t closes at
+        # t+1s, so the next eligible decision is 10 stamps later.
+        ts = np.arange(50, dtype=np.int64) * 100_000_000
+        keep = _non_overlapping(ts, horizon_ns=1_000_000_000, delta_ns=0)
+        kept = np.flatnonzero(keep)
+        self.assertEqual(kept.tolist(), list(range(0, 50, 10)))
+
+    def test_latency_widens_the_spacing(self):
+        from edge.costs.run import _non_overlapping
+
+        # delta 100ms + horizon 1s = 1.1s span -> 11 stamps apart on a 100ms grid.
+        ts = np.arange(50, dtype=np.int64) * 100_000_000
+        keep = _non_overlapping(ts, horizon_ns=1_000_000_000, delta_ns=100_000_000)
+        kept = np.flatnonzero(keep)
+        self.assertEqual(kept.tolist(), [0, 11, 22, 33, 44])
+
+    def test_irregular_stamps_still_never_overlap(self):
+        from edge.costs.run import _non_overlapping
+
+        rng = np.random.default_rng(0)
+        ts = np.cumsum(rng.integers(1, 500_000_000, size=2000)).astype(np.int64)
+        horizon = 1_000_000_000
+        keep = _non_overlapping(ts, horizon_ns=horizon, delta_ns=0)
+        chosen = ts[keep]
+        # Every consecutive pair must be at least the holding span apart.
+        self.assertTrue(np.all(np.diff(chosen) >= horizon))
+
+    def test_first_stamp_is_always_taken(self):
+        from edge.costs.run import _non_overlapping
+
+        ts = np.array([5, 6, 7], dtype=np.int64) * 1_000_000_000
+        keep = _non_overlapping(ts, horizon_ns=1_000_000_000, delta_ns=0)
+        self.assertTrue(bool(keep[0]))

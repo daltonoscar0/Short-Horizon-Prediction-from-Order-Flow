@@ -23,6 +23,7 @@ import pyarrow.parquet as pq
 
 from edge.costs import LATENCIES_NS, TRADE_SIZE_SHARES
 from edge.costs.pnl import (
+    PRICE_SCALE,
     apply_latency,
     break_even_cost_bps,
     break_even_cost_ticks,
@@ -56,9 +57,38 @@ def _load_touch(frames_dir, ticker):
     return {n: t.column(n).to_numpy(zero_copy_only=False) for n in FRAME_COLS}
 
 
+def _non_overlapping(stamp_ts, horizon_ns, delta_ns):
+    """Positions at least `delta + horizon` apart, so at most one is ever open.
+
+    EVAL_PROTOCOL.md sec. 3 mandates "single unit, no inventory accumulation, flat at
+    horizon". Taking a decision at every stamp would violate that outright: on the 100ms
+    calendar grid with a 1s horizon, ten positions would be open simultaneously and the PnL
+    would be a leveraged overlapping sum rather than the boring single-unit strategy the
+    protocol asks for. Greedily keeping the earliest eligible stamp is the deterministic
+    choice; it also makes the trade count an honest measure of turnover.
+    """
+    keep = np.zeros(stamp_ts.shape[0], dtype=bool)
+    span = int(delta_ns) + int(horizon_ns)
+    next_free = np.iinfo(np.int64).min
+    for i, t in enumerate(stamp_ts):
+        if t >= next_free:
+            keep[i] = True
+            next_free = t + span
+    return keep
+
+
 def simulate(cols, touch, y, ts, horizon_ns, delta_ns, rung, folds, common_mask,
-             deadband_ticks=0.5):
-    """One rung, one latency. Returns per-trade PnL and the trade direction vector."""
+             deadband_ticks=0.0):
+    """One rung, one latency. Returns per-trade PnL and the trade direction vector.
+
+    Direction is the SIGN of the prediction, not a deadband on its magnitude. The first cut
+    of this runner reused the labels' 0.5-tick deadband as a trading threshold, and L0/L1/L2
+    then took ZERO trades across the whole session -- a scaled sign predictor never emits a
+    magnitude above half a tick at a 1s horizon, where 96% of realised moves are zero. That
+    left the break-even table empty for exactly the rungs it most needs to price. A deadband
+    is a position-sizing choice, not part of the signal; `deadband_ticks` stays available as
+    a sensitivity but defaults to 0.
+    """
     feats = list(rung.features)
     X = (np.column_stack([cols[f] for f in feats]) if feats
          else np.zeros((y.shape[0], 0), dtype=np.float64))
@@ -71,6 +101,7 @@ def simulate(cols, touch, y, ts, horizon_ns, delta_ns, rung, folds, common_mask,
 
     pnl_all = np.full(y.shape[0], np.nan, dtype=np.float64)
     dir_all = np.zeros(y.shape[0], dtype=np.float64)
+    gross_all = np.full(y.shape[0], np.nan, dtype=np.float64)
 
     for fold in folds:
         tr = fold.train_idx[common_mask[fold.train_idx]]
@@ -80,11 +111,16 @@ def simulate(cols, touch, y, ts, horizon_ns, delta_ns, rung, folds, common_mask,
         rung.fit(X[tr], y[tr])
         pred = rung.predict(X[te])
 
-        # Trade only on conviction above the same deadband the labels use, so the strategy
-        # is not paying the spread on every 100ms tick to chase noise.
         direction = np.zeros(te.shape[0], dtype=np.float64)
         direction[pred > deadband_ticks] = 1.0
         direction[pred < -deadband_ticks] = -1.0
+
+        # Enforce "single unit, no inventory accumulation, flat at horizon": keep only
+        # decision points spaced at least delta + h apart, so at most one position is ever
+        # open. Without this, a 1s horizon on the 100ms grid runs ten overlapping positions
+        # and the PnL is a leveraged sum, not the boring strategy the protocol specifies.
+        spaced = _non_overlapping(ts[te], horizon_ns, delta_ns)
+        direction = np.where(spaced, direction, 0.0)
 
         er, xr = entry_rows[te], exit_rows[te]
         valid = (er >= 0) & (xr >= 0) & (direction != 0)
@@ -98,7 +134,17 @@ def simulate(cols, touch, y, ts, horizon_ns, delta_ns, rung, folds, common_mask,
         pnl_all[idx] = pnl
         dir_all[idx] = direction[valid]
 
-    return pnl_all, dir_all
+        # Mid-to-mid PnL: no spread crossing, no fees. This isolates the SIGNAL's economic
+        # value from the cost of acting on it. Without it the net table is uninformative
+        # about the signal, because an always-on strategy loses almost exactly the spread
+        # whatever it predicts, and every rung's break-even collapses to the same number.
+        mid_entry = 0.5 * (bid[er[valid]] + ask[er[valid]])
+        mid_exit = 0.5 * (bid[xr[valid]] + ask[xr[valid]])
+        gross_all[idx] = (
+            direction[valid] * (mid_exit - mid_entry) / PRICE_SCALE * TRADE_SIZE_SHARES
+        )
+
+    return pnl_all, dir_all, gross_all
 
 
 def main(argv=None):
@@ -133,7 +179,7 @@ def main(argv=None):
                                    n_folds=N_FOLDS, seed=args.seed)
                 for rung in build_ladder(seed=args.seed):
                     for delta in LATENCIES_NS:
-                        pnl, direction = simulate(
+                        pnl, direction, gross = simulate(
                             cols, touch, y, ts, HORIZON_NS[h], delta, rung, folds, mask
                         )
                         traded = np.isfinite(pnl) & (direction != 0)
@@ -148,6 +194,7 @@ def main(argv=None):
                             })
                             continue
                         vals = pnl[traded]
+                        gross_vals = gross[traded]
                         tk = turnover_and_holding(direction, HORIZON_NS[h])
                         ci = block_bootstrap_ci(
                             vals, block_len=max(10, int(HORIZON_NS[h] // 100_000_000)),
@@ -165,6 +212,11 @@ def main(argv=None):
                             "be_ticks": break_even_cost_ticks(vals, n_trades),
                             "be_bps": break_even_cost_bps(vals, n_trades, avg_px),
                             "trade_rate": tk["trade_rate"],
+                            "gross_total": float(np.nansum(gross_vals)),
+                            "gross_per_trade": float(np.nanmean(gross_vals)),
+                            "gross_ticks_per_trade": float(
+                                np.nanmean(gross_vals) / TRADE_SIZE_SHARES / 0.01
+                            ),
                             "dsr": d["dsr"], "sharpe": d["sharpe"],
                             "ci_lo": ci["lo"], "ci_hi": ci["hi"],
                         })
@@ -210,12 +262,13 @@ def _write(args, rows):
         w("## Break-even cost table (the headline)\n\n")
         w("The per-share cost at which each rung's PnL crosses zero. Negative means the rung ")
         w("is already underwater before any additional cost — reported, not clipped.\n\n")
-        w("| ticker | clock | h | rung | latency | trades | total PnL $ | break-even (ticks) | "
-          "break-even (bps) | PnL CI lo | PnL CI hi | DSR |\n")
-        w("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+        w("| ticker | clock | h | rung | latency | trades | gross ticks/trade | net PnL $ | "
+          "break-even (ticks) | break-even (bps) | PnL CI lo | PnL CI hi | DSR |\n")
+        w("|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
         for r in rows:
             w(f"| {r['ticker']} | {r['clock']} | {r['h']} | {r['rung']} | "
-              f"{r['delta_ms']:.0f}ms | {r['n_trades']} | {_f(r.get('total_pnl'), 2)} | "
+              f"{r['delta_ms']:.0f}ms | {r['n_trades']} | "
+              f"{_f(r.get('gross_ticks_per_trade'), 4)} | {_f(r.get('total_pnl'), 2)} | "
               f"{_f(r.get('be_ticks'))} | {_f(r.get('be_bps'), 2)} | "
               f"{_f(r.get('ci_lo'), 4)} | {_f(r.get('ci_hi'), 4)} | {_f(r.get('dsr'), 3)} |\n")
         w("\n")
