@@ -6,9 +6,11 @@ sample, 2012-06-21, 10 levels, INTC (large-tick) and AMZN (small-tick). See
 milestone this report satisfies.
 
 Hard invariants (fail `make data` if violated): crossed-book count = 0, raw
-message/orderbook/parquet row counts equal, ts_ns non-decreasing. Everything else is a
-loud warning, not a build failure. No matplotlib: all profiles below are markdown tables
-with ASCII bar columns (see DECISIONS.md, 2026-07-30).
+message/orderbook/parquet row counts equal, ts_ns non-decreasing, message<->orderbook
+alignment hold rate >= 99% (row *k* of the orderbook file is the state after message *k* --
+see the "Message<->orderbook alignment" section per ticker). Everything else is a loud
+warning, not a build failure. No matplotlib: all profiles below are markdown tables with
+ASCII bar columns (see DECISIONS.md, 2026-07-30).
 
 ## AMZN -- 2012-06-21
 
@@ -41,6 +43,15 @@ All event-type counts match `docs/DATA_CONTRACT.md` exactly.
 - crossed-book count (`bid_px_1 >= ask_px_1`): 0 (expected 0) -- PASS
 - locked-book count (`bid_px_1 == ask_px_1`): 0
 - sentinel best-level rows (informational, defensive check): 0
+
+### Message<->orderbook alignment
+
+`docs/DATA_CONTRACT.md`: row *k* of the orderbook file is the book state immediately AFTER message *k*. Checked directly (not inferred from crossed/monotonic/median-mid, which are blind to a message<->orderbook off-by-one -- see `reports/adversary/phase0-quality-2026-07-30.md` item 10): for a deterministic sample of type-1/2/3/4 messages, does the message's own (side, price) level size move between row k-1 and row k by exactly the message's signed effect?
+
+- sampled events: 4000
+- checked (excludes level absent from both rows): 4000
+- holds: 4000
+- hold rate: 1.0000 (required >= 99% over >= 500 checked) -- PASS
 
 ### Timestamp monotonicity
 
@@ -116,6 +127,15 @@ All event-type counts match `docs/DATA_CONTRACT.md` exactly.
 - crossed-book count (`bid_px_1 >= ask_px_1`): 0 (expected 0) -- PASS
 - locked-book count (`bid_px_1 == ask_px_1`): 0
 - sentinel best-level rows (informational, defensive check): 0
+
+### Message<->orderbook alignment
+
+`docs/DATA_CONTRACT.md`: row *k* of the orderbook file is the book state immediately AFTER message *k*. Checked directly (not inferred from crossed/monotonic/median-mid, which are blind to a message<->orderbook off-by-one -- see `reports/adversary/phase0-quality-2026-07-30.md` item 10): for a deterministic sample of type-1/2/3/4 messages, does the message's own (side, price) level size move between row k-1 and row k by exactly the message's signed effect?
+
+- sampled events: 4000
+- checked (excludes level absent from both rows): 4000
+- holds: 4000
+- hold rate: 1.0000 (required >= 99% over >= 500 checked) -- PASS
 
 ### Timestamp monotonicity
 

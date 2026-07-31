@@ -7,15 +7,20 @@ Hard invariants (non-zero exit, fails `make data`):
   - crossed-book count (bid_px_1 >= ask_px_1) > 0
   - row-count mismatch across raw message / raw orderbook / parquet frame
   - non-monotone ts_ns (any strict decrease)
+  - message<->orderbook alignment hold rate below ALIGNMENT_HOLD_RATE_THRESHOLD (see
+    `compute_alignment_hold_rate`) -- the only invariant here that constrains the *join*
+    between the two raw files rather than a property of the orderbook file alone.
 Everything else (event-count-vs-contract mismatch, median-mid out of the sanity bounds,
 absence of the U-shape) is logged loudly in the report but does not block the build -- these
 are "look at this" signals, not proof by themselves that the parser is broken.
 """
 import argparse
 import os
+import random
 import sys
 
 import numpy as np
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from edge.io.lobster import ASK_SENTINEL_PRICE, BID_SENTINEL_PRICE, discover_pairs
@@ -48,6 +53,18 @@ DAY_START_NS = 34_200 * 1_000_000_000  # 09:30:00 after midnight
 DAY_END_NS = 57_600 * 1_000_000_000  # 16:00:00 after midnight
 BIN_NS = 30 * 60 * 1_000_000_000  # 30-minute intraday bins
 GAP_THRESHOLD_NS = 1_000_000_000  # 1s, per PLAN.md's gap-detection ask
+
+# Event types whose own-price level size is expected to move between orderbook rows k-1 and
+# k, per docs/DATA_CONTRACT.md's event-type table: 1 adds size, 2/3 remove it, 4 removes it
+# from the resting side. 5/6/7 are documented "book unaffected" and carry no alignment
+# signal (an automatic pass would only dilute the statistic).
+ALIGNMENT_EVENT_TYPES = (1, 2, 3, 4)
+ALIGNMENT_SAMPLE_SIZE = 4000  # measured hold rates are ~100% (aligned) vs ~5-6% (off-by-one)
+ALIGNMENT_MIN_CHECKED = 500  # below this the sample can't distinguish the two regimes
+# Real data holds at 100% (see DECISIONS.md / test_alignment.py); a +1 row shift collapses
+# to ~5-6%. 99% leaves > 15x headroom below the true rate while still failing hard on any
+# off-by-one, so there is no ambiguous middle ground to tune against.
+ALIGNMENT_HOLD_RATE_THRESHOLD = 0.99
 
 
 # --------------------------------------------------------------------------------------
@@ -82,6 +99,114 @@ def sentinel_row_count(bid_px_1, ask_px_1):
     bid = np.asarray(bid_px_1)
     ask = np.asarray(ask_px_1)
     return int(np.sum((bid == BID_SENTINEL_PRICE) | (ask == ASK_SENTINEL_PRICE)))
+
+
+def alignment_effect_expected(event_type, size):
+    """Signed net effect of a message on its own (side, price) level size, row k-1 -> row k.
+
+    docs/DATA_CONTRACT.md: "Row k of the orderbook file is the book state immediately AFTER
+    message k." Type 1 (new limit) adds `size` to the level; types 2 (partial cancel), 3
+    (full delete), 4 (visible execution) remove `size` from the resting side's level.
+    """
+    return size if event_type == 1 else -size
+
+
+def level_size_at(px_levels, sz_levels, price):
+    """Displayed size at `price` among one row's level arrays; None if not displayed there.
+
+    None (not 0) for an absent level, and sentinel prices (ASK_SENTINEL_PRICE /
+    BID_SENTINEL_PRICE) never match a real message price -- callers must not coerce this to
+    0 before checking both rows of a comparison, or a level absent from both would silently
+    score a 0-0 "pass" for a message that never touched a visible level at all.
+    """
+    for px, sz in zip(px_levels, sz_levels):
+        if px == price and px != ASK_SENTINEL_PRICE and px != BID_SENTINEL_PRICE:
+            return int(sz)
+    return None
+
+
+def sample_alignment_indices(event_type, n_rows, sample_size, seed):
+    """Deterministic sample of row indices k in [1, n_rows) with a scoreable event type.
+
+    k=0 has no k-1 predecessor and is excluded, per ALIGNMENT_EVENT_TYPES's docstring.
+    """
+    event_type = np.asarray(event_type)
+    if n_rows < 2:
+        return []
+    eligible = (np.nonzero(np.isin(event_type[1:], ALIGNMENT_EVENT_TYPES))[0] + 1).tolist()
+    rng = random.Random(seed)
+    if len(eligible) <= sample_size:
+        return eligible
+    return rng.sample(eligible, sample_size)
+
+
+def compute_alignment_hold_rate(table, num_levels, seed, sample_size=ALIGNMENT_SAMPLE_SIZE):
+    """Hold rate of the row k-1 -> k alignment identity on a deterministic sample of events.
+
+    The only hard invariant in this module that reads BOTH the message fields (event_type,
+    direction, price, size) and the book state of two consecutive rows together -- crossed,
+    row-count and monotonicity checks are each a property of one file alone and are
+    structurally blind to a message<->orderbook off-by-one (see
+    reports/adversary/phase0-quality-2026-07-30.md, item 10). Undecidable events -- the
+    message's (side, price) level absent from BOTH row k-1 and row k, e.g. an order outside
+    the visible `num_levels` depth -- are excluded from the denominator, not scored as a pass.
+    """
+    n_rows = table.num_rows
+    event_type_full = table.column("event_type").to_numpy(zero_copy_only=False)
+    idx = sample_alignment_indices(event_type_full, n_rows, sample_size, seed)
+    if not idx:
+        return {"n_sampled": 0, "n_checked": 0, "n_holds": 0, "hold_rate": float("nan")}
+
+    needed_rows = sorted(set(idx) | {k - 1 for k in idx})
+    cols = ["direction", "price", "size", "event_type"]
+    for lvl in range(1, num_levels + 1):
+        cols += [f"bid_px_{lvl}", f"bid_sz_{lvl}", f"ask_px_{lvl}", f"ask_sz_{lvl}"]
+    sub = table.select(cols).take(pa.array(needed_rows, type=pa.int64()))
+    row_pos = {r: i for i, r in enumerate(needed_rows)}
+
+    direction = sub.column("direction").to_numpy(zero_copy_only=False)
+    price = sub.column("price").to_numpy(zero_copy_only=False)
+    size = sub.column("size").to_numpy(zero_copy_only=False)
+    etype = sub.column("event_type").to_numpy(zero_copy_only=False)
+    bid_px = np.column_stack(
+        [sub.column(f"bid_px_{lvl}").to_numpy(zero_copy_only=False) for lvl in range(1, num_levels + 1)]
+    )
+    bid_sz = np.column_stack(
+        [sub.column(f"bid_sz_{lvl}").to_numpy(zero_copy_only=False) for lvl in range(1, num_levels + 1)]
+    )
+    ask_px = np.column_stack(
+        [sub.column(f"ask_px_{lvl}").to_numpy(zero_copy_only=False) for lvl in range(1, num_levels + 1)]
+    )
+    ask_sz = np.column_stack(
+        [sub.column(f"ask_sz_{lvl}").to_numpy(zero_copy_only=False) for lvl in range(1, num_levels + 1)]
+    )
+
+    n_checked = 0
+    n_holds = 0
+    for k in idx:
+        i_prev = row_pos[k - 1]
+        i_next = row_pos[k]
+        d = int(direction[i_next])
+        et = int(etype[i_next])
+        p = int(price[i_next])
+        s = int(size[i_next])
+        if d == 1:
+            prev_val = level_size_at(bid_px[i_prev], bid_sz[i_prev], p)
+            next_val = level_size_at(bid_px[i_next], bid_sz[i_next], p)
+        else:
+            prev_val = level_size_at(ask_px[i_prev], ask_sz[i_prev], p)
+            next_val = level_size_at(ask_px[i_next], ask_sz[i_next], p)
+        if prev_val is None and next_val is None:
+            continue  # undecidable: excluded from the denominator, not scored as a pass
+
+        prev_size = 0 if prev_val is None else prev_val
+        next_size = 0 if next_val is None else next_val
+        n_checked += 1
+        if next_size - prev_size == alignment_effect_expected(et, s):
+            n_holds += 1
+
+    hold_rate = n_holds / n_checked if n_checked else float("nan")
+    return {"n_sampled": len(idx), "n_checked": n_checked, "n_holds": n_holds, "hold_rate": hold_rate}
 
 
 def check_monotonic_ts(ts_ns):
@@ -299,7 +424,7 @@ def _intraday_table(profile):
     return "\n".join(lines)
 
 
-def build_ticker_report(ticker, date, raw_msg_rows, raw_book_rows, parquet_rows, table):
+def build_ticker_report(ticker, date, raw_msg_rows, raw_book_rows, parquet_rows, table, num_levels, seed):
     ts_ns = table.column("ts_ns").to_numpy(zero_copy_only=False)
     event_type = table.column("event_type").to_numpy(zero_copy_only=False)
     bid_px_1 = table.column("bid_px_1").to_numpy(zero_copy_only=False)
@@ -326,6 +451,12 @@ def build_ticker_report(ticker, date, raw_msg_rows, raw_book_rows, parquet_rows,
     profile = build_intraday_profile(ts_ns, bid_px_1, bid_sz_1, ask_px_1, ask_sz_1)
     u_shape = confirm_u_shape([r["event_count"] for r in profile])
 
+    alignment = compute_alignment_hold_rate(table, num_levels, seed)
+    alignment_ok = (
+        alignment["n_checked"] >= ALIGNMENT_MIN_CHECKED
+        and alignment["hold_rate"] >= ALIGNMENT_HOLD_RATE_THRESHOLD
+    )
+
     hard_failures = []
     if crossed > 0:
         hard_failures.append(f"crossed-book count = {crossed} (expected 0)")
@@ -338,6 +469,13 @@ def build_ticker_report(ticker, date, raw_msg_rows, raw_book_rows, parquet_rows,
         hard_failures.append(
             f"ts_ns not monotone: {mono['num_violations']} violation(s), "
             f"first at index {mono['first_violation_index']}"
+        )
+    if not alignment_ok:
+        hard_failures.append(
+            f"alignment hold rate = {alignment['hold_rate']:.4f} over "
+            f"{alignment['n_checked']} checked / {alignment['n_sampled']} sampled events, "
+            f"required >= {ALIGNMENT_HOLD_RATE_THRESHOLD:.0%} on >= {ALIGNMENT_MIN_CHECKED} "
+            f"checked -- message/orderbook rows may be misaligned (docs/DATA_CONTRACT.md)"
         )
 
     lines = [
@@ -375,6 +513,21 @@ def build_ticker_report(ticker, date, raw_msg_rows, raw_book_rows, parquet_rows,
         f"- locked-book count (`bid_px_1 == ask_px_1`): {locked}",
         f"- sentinel best-level rows (informational, defensive check): {n_sentinel}",
         "",
+        "### Message<->orderbook alignment",
+        "",
+        "`docs/DATA_CONTRACT.md`: row *k* of the orderbook file is the book state "
+        "immediately AFTER message *k*. Checked directly (not inferred from crossed/monotonic/"
+        "median-mid, which are blind to a message<->orderbook off-by-one -- see "
+        "`reports/adversary/phase0-quality-2026-07-30.md` item 10): for a deterministic sample "
+        "of type-1/2/3/4 messages, does the message's own (side, price) level size move "
+        "between row k-1 and row k by exactly the message's signed effect?",
+        "",
+        f"- sampled events: {alignment['n_sampled']}",
+        f"- checked (excludes level absent from both rows): {alignment['n_checked']}",
+        f"- holds: {alignment['n_holds']}",
+        f"- hold rate: {alignment['hold_rate']:.4f} (required >= {ALIGNMENT_HOLD_RATE_THRESHOLD:.0%} "
+        f"over >= {ALIGNMENT_MIN_CHECKED} checked) -- {'PASS' if alignment_ok else '**FAIL**'}",
+        "",
         "### Timestamp monotonicity",
         "",
         f"- monotonic non-decreasing: {mono['is_monotonic']}",
@@ -409,6 +562,9 @@ def build_ticker_report(ticker, date, raw_msg_rows, raw_book_rows, parquet_rows,
         "median_mid": median_mid,
         "mid_ok": mid_ok,
         "row_counts_match": row_counts_match,
+        "alignment_hold_rate": alignment["hold_rate"],
+        "alignment_n_checked": alignment["n_checked"],
+        "alignment_ok": alignment_ok,
         "hard_failures": hard_failures,
     }
     return "\n".join(lines), stats
@@ -431,9 +587,20 @@ sample, 2012-06-21, 10 levels, INTC (large-tick) and AMZN (small-tick). See
 milestone this report satisfies.
 
 Hard invariants (fail `make data` if violated): crossed-book count = 0, raw
-message/orderbook/parquet row counts equal, ts_ns non-decreasing. Everything else is a
-loud warning, not a build failure. No matplotlib: all profiles below are markdown tables
-with ASCII bar columns (see DECISIONS.md, 2026-07-30)."""
+message/orderbook/parquet row counts equal, ts_ns non-decreasing, message<->orderbook
+alignment hold rate >= 99% (row *k* of the orderbook file is the state after message *k* --
+see the "Message<->orderbook alignment" section per ticker). Everything else is a loud
+warning, not a build failure. No matplotlib: all profiles below are markdown tables with
+ASCII bar columns (see DECISIONS.md, 2026-07-30)."""
+
+
+def _report_columns(num_levels):
+    """Parquet columns needed for the full report, including all L levels for alignment."""
+    cols = ["ts_ns", "event_type", "direction", "price", "size"]
+    for side in ("bid", "ask"):
+        for kind in ("px", "sz"):
+            cols += [f"{side}_{kind}_{lvl}" for lvl in range(1, num_levels + 1)]
+    return cols
 
 
 def main(argv=None):
@@ -463,14 +630,12 @@ def main(argv=None):
 
         raw_msg_rows = count_lines(pair["message_path"])
         raw_book_rows = count_lines(pair["orderbook_path"])
-        table = pq.read_table(
-            parquet_path,
-            columns=["ts_ns", "event_type", "bid_px_1", "bid_sz_1", "ask_px_1", "ask_sz_1"],
-        )
+        table = pq.read_table(parquet_path, columns=_report_columns(pair["num_levels"]))
         parquet_rows = table.num_rows
 
         section, stats = build_ticker_report(
-            ticker, date, raw_msg_rows, raw_book_rows, parquet_rows, table
+            ticker, date, raw_msg_rows, raw_book_rows, parquet_rows, table,
+            pair["num_levels"], args.seed,
         )
         sections.append(section)
         summary[ticker] = stats
@@ -484,7 +649,8 @@ def main(argv=None):
         print(
             f"{ticker}: crossed={stats['crossed_book']} monotonic={stats['monotonic']} "
             f"u_shape={stats['u_shape']} median_mid=${stats['median_mid']:.4f} "
-            f"(bounds ok={stats['mid_ok']})"
+            f"(bounds ok={stats['mid_ok']}) align_hold_rate={stats['alignment_hold_rate']:.4f} "
+            f"(n_checked={stats['alignment_n_checked']}, ok={stats['alignment_ok']})"
         )
 
     if all_hard_failures:
