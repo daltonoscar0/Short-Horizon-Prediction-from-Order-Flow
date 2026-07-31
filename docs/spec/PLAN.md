@@ -10,15 +10,22 @@ The new work is features + harness + writeup.
 
 ## Phase 0 — Data contract and repo skeleton (day 1–2)
 
-- [ ] Import the LOBSTER parser from orderflow-lm as a package, not a copy-paste. Freeze
-      its output schema in `docs/DATA_CONTRACT.md`.
-- [ ] Assert the message/orderbook alignment invariant: row *k* of the orderbook file is
+- [x] Import the LOBSTER parser from orderflow-lm as a package, not a copy-paste. Freeze
+      its output schema in `docs/DATA_CONTRACT.md`. (orderflow-lm's parser turned out to be
+      C++ with no Python bindings — reads the CSV pair directly instead, orderflow-lm stays
+      the convention reference; see `DECISIONS.md` 2026-07-30.)
+- [x] Assert the message/orderbook alignment invariant: row *k* of the orderbook file is
       the state **after** message *k*. Write the test that fails if this is off by one.
-- [ ] Build the event-indexed frame: `(ts_ns, event_type, direction, price, size,
+      (`tests/test_alignment.py::test_orderbook_row_is_state_after_message`, green against
+      full raw INTC/AMZN files.)
+- [x] Build the event-indexed frame: `(ts_ns, event_type, direction, price, size,
       bid_px[1..L], bid_sz[1..L], ask_px[1..L], ask_sz[1..L])`.
-- [ ] Sanity plots: intraday spread, depth, event-rate profile. Confirm the U-shape.
-      If it isn't there, the parse is wrong.
-- [ ] Decide and document the universe: start with **one large-tick and one small-tick
+      (`src/edge/io/lobster.py:build_event_frame`.)
+- [x] Sanity plots: intraday spread, depth, event-rate profile. Confirm the U-shape.
+      If it isn't there, the parse is wrong. (Markdown tables, not plots — `reports/
+      data_quality.md`; INTC shows a clean U-shape, AMZN's is weaker at the open —
+      logged as an observation, not a bug, since alignment/crossed-book/scaling all pass.)
+- [x] Decide and document the universe: start with **one large-tick and one small-tick
       name** (e.g. INTC vs AMZN in the free sample). The tick-size regime is the single
       biggest driver of which features work, and having both is an interview talking point.
 
@@ -101,6 +108,12 @@ test on another), and the regime split (high-vol vs low-vol hours).
 
 ## Status
 
-- Current phase: 0
-- Next 3 tasks: (fill in)
+- Current phase: 1
+- Next 3 tasks:
+  1. Implement the `FEATURES.md` formulas as pure functions, each with a unit test on a
+     hand-built toy book where the correct value is known by inspection.
+  2. Build the two clocks (calendar-time 100ms grid, event-time every N events) that every
+     downstream feature/label gets reported on.
+  3. Rolling normalization only (trailing-window z-scores, fit on past data only) plus the
+     adversarial test that fails if a full-sample scaler sneaks in.
 - Trials logged so far: 0

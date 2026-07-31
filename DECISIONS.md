@@ -57,3 +57,50 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   brief's [20,35] / [200,250] bounds, confirming `/10000` is the correct dollar conversion.
   Recorded in `docs/DATA_CONTRACT.md`; the adapter-level assertion of this is deferred to
   the data-quality-report step.
+- 2026-07-30 — `make test`/`make data` both green: `src/edge/io/lobster.py` implements
+  `read_message_file`, `read_orderbook_file`, `build_event_frame`, and the CLI exactly per
+  `docs/DATA_CONTRACT.md`'s Adapter API. All 12 tests pass, including
+  `test_orderbook_row_is_state_after_message` and `test_inverted_direction_does_not_hold`
+  run against the full raw INTC (624,040 rows) and AMZN (269,748 rows) files, not just the
+  toy fixture. Frame row counts match the raw CSV line counts exactly for both tickers.
+- 2026-07-30 — `Makefile`'s `PYTHON` is now autodetected (`python3`, falling back to
+  `/opt/anaconda3/bin/python3`, then `python3.12`) instead of hardcoded `python3`. Root
+  cause: on this machine, bare `python3` resolves to Xcode's `/usr/bin/python3` (3.9, no
+  pyarrow) ahead of the conda `base` env that actually has the declared deps (pyarrow
+  23.0.1, numpy) — macOS's `path_helper` (run from `/etc/zprofile` for login shells)
+  re-prepends `/usr/local/bin:/usr/bin:/bin:...` ahead of whatever conda's `.zshrc` block
+  added, in every shell mode tested (non-interactive, interactive, login+interactive).
+  `/usr/bin/python3` is also below `pyproject.toml`'s declared `requires-python = ">=3.10"`
+  regardless of pyarrow. The Makefile fix tries plain `python3` first (a no-op on any
+  ordinary single-interpreter checkout) and only falls back if the import check fails, so
+  it doesn't change behavior anywhere except this specific quirk. Verified: `make test` and
+  `make data` both succeed as bare commands (no manual PATH override) after this change.
+- 2026-07-30 — Added `src/edge/io/quality.py` (`python3 -m edge.io.quality --frames --out
+  --seed`), invoked as the second step of `make data`, to generate `reports/
+  data_quality.md` from the built parquet frames (not by re-parsing the raw CSVs a second
+  time). It hard-fails (`SystemExit`) if crossed-book count != 0 or median mid falls
+  outside the ticker's expected dollar range — per `CLAUDE.md`/`PLAN.md`, those are
+  fix-the-parser signals, not report-around-them signals. No new dependency: pyarrow +
+  numpy + stdlib only.
+- 2026-07-30 — Sentinel-safe "valid quote" mask (`ASK_SENTINEL_PRICE`/`BID_SENTINEL_PRICE`,
+  now exported from `edge.io.lobster` and reused in `quality.py`): a best-bid/ask pair only
+  counts toward the crossed-book check and the spread/depth intraday profile if neither
+  side is the LOBSTER sentinel (`ask 9999999999` / `bid -9999999999`) with size 0. Zero
+  such rows in this sample (confirmed in the report output), but the check is real code now
+  instead of a documented assumption.
+- 2026-07-30 — Intraday profile bucketing: 30-minute wall-clock buckets (`ts_ns` divided
+  into half-hour bins from midnight, labelled by clock time, not by an assumed 09:30
+  session-start offset, so it doesn't depend on trusting the filename's start/end fields).
+  Event-rate U-shape is checked with a coarse heuristic (first bucket and last bucket both
+  above the profile's median bucket count). Result: INTC clean U-shape (**yes**); AMZN
+  fails the heuristic (**no**) — its close-of-day surge is sharp but its open (09:30-10:00,
+  17,520 events) is not the profile's peak (10:00-11:00 buckets run higher). Not treated as
+  a parse bug: event-type counts match `DATA_CONTRACT.md` exactly (cross-checked
+  independently with `awk` directly on the raw CSV, bypassing the adapter entirely),
+  crossed-book count is 0, and median mid is in-range for both tickers — the weaker AMZN
+  open-of-day effect is recorded as a genuine finding about this name/day, to revisit if
+  AMZN-specific features behave oddly in Phase 1.
+- 2026-07-30 — `docs/spec/PLAN.md` Phase 0 checkboxes ticked, status moved to Phase 1, next
+  three tasks set to `FEATURES.md` implementation / two-clock construction / rolling-only
+  normalization (the first three Phase 1 bullets), per the Phase-0 exit criteria in the
+  task brief.
