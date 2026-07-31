@@ -34,16 +34,31 @@ printed data-quality report (event counts by type, crossed-book count = 0, gaps)
 
 ## Phase 1 — Feature library (day 3–6)
 
-- [ ] Implement everything in `FEATURES.md`, each as a pure function with a unit test on a
+- [x] Implement everything in `FEATURES.md`, each as a pure function with a unit test on a
       hand-built toy book where the correct value is known by inspection.
-- [ ] Two clocks: calendar time (100ms grid) and event time (every N events). Every
+      (Six family modules, 144 raw columns; `docs/INTERFACE.md` is the frozen contract.
+      Coverage is not yet one hand-computed literal per column — see the gap note below.)
+- [x] Two clocks: calendar time (100ms grid) and event time (every N events). Every
       downstream result gets reported on both, because calendar-time results on a quiet
       stock are mostly measuring the clock.
-- [ ] Rolling normalization only: z-scores from a trailing window, fit on past data only.
+- [x] Rolling normalization only: z-scores from a trailing window, fit on past data only.
       No full-sample scaler anywhere. Write the test that detects one.
-- [ ] Label construction: Δmid and Δmicroprice at h ∈ {1s, 2s, 5s, 10s} plus the event-time
+      (`normalize.rolling_zscore` baselines `[t-window, t)` in stamp positions, strictly
+      excluding `x[t]`; `tests/test_normalize.py::TestNoFullSampleFit`.)
+- [x] Label construction: Δmid and Δmicroprice at h ∈ {1s, 2s, 5s, 10s} plus the event-time
       equivalents; classification labels with an explicit deadband α (report the α
-      sensitivity, don't tune it).
+      sensitivity, don't tune it). (α = 0.5 ticks frozen by rule; the microprice label is
+      substituted by a weighted-mid label — `DECISIONS.md` 2026-07-31.)
+
+**Known gap carried into Phase 2**, recorded rather than papered over: `FEATURES.md`'s
+"every feature gets a hand-computed toy-book test" is met for every formula and for every
+mutation the 2026-07-31 audit could construct, but not yet as one literal per emitted
+column. Untested-by-literal at close: ~35 `ofi_l{m}_{w}` level×window combinations (the
+level indexing, depth scaling, PCA orientation and fit-sample causality are each pinned,
+but not every cell of the cross product), 12 `label_*` columns at the 2s/5s/10s horizons
+(NaN rules asserted, values not), and 5 `st_*` columns that survive replacement by zeros.
+None of these blocks the harness; all of them are places a silent regression could still
+land.
 
 **Milestone:** `features.parquet` + a correlation table of every feature against every
 horizon's label, with intraday-seasonality-adjusted versions alongside raw.
@@ -108,12 +123,18 @@ test on another), and the regime split (high-vol vs low-vol hours).
 
 ## Status
 
-- Current phase: 1
+- Current phase: 2
 - Next 3 tasks:
-  1. Implement the `FEATURES.md` formulas as pure functions, each with a unit test on a
-     hand-built toy book where the correct value is known by inspection.
-  2. Build the two clocks (calendar-time 100ms grid, event-time every N events) that every
-     downstream feature/label gets reported on.
-  3. Rolling normalization only (trailing-window z-scores, fit on past data only) plus the
-     adversarial test that fails if a full-sample scaler sneaks in.
-- Trials logged so far: 0
+  1. **L0/L1** — constant/base-rate predictor and the unfitted signs (`sign(qi_touch)`,
+     `sign(mp_dev_mid)`). L1 is load-bearing under the new framing: it has no parameters,
+     so a near-zero A→C gap on L1 is what separates a measurement of optimism from an
+     artifact of the harness (`DECISIONS.md` 2026-07-31).
+  2. The hand-written three-protocol splitter (A shuffled k-fold, B unpurged walk-forward,
+     C purged walk-forward with embargo), adversarial tests FIRST per CLAUDE.md rule 2 —
+     the test that fails when a labelled sample straddles a fold boundary gets written
+     before the splitter does.
+  3. **L2** — OLS of Δmid on best-level OFI, reproducing Cont–Kukanov–Stoikov. The
+     standalone `make selfcheck` already clears this on all four ticker/clock combos, so
+     L2 should recover it inside the harness or the harness is wrong.
+- Trials logged so far: 0 (Phase 1 produced no fitted predictions; the correlation table is
+  triage, explicitly not a result)

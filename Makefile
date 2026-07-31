@@ -4,6 +4,7 @@
 RAW_DIR ?= data/raw/lobster
 OUT_DIR ?= data/frames
 REPORT ?= reports/data_quality.md
+FEATURES_OUT ?= data/features
 SEED ?= 0
 
 # Plain `python3` is preferred as-is (a normal single-interpreter checkout needs nothing
@@ -16,9 +17,13 @@ PYTHON := $(shell for c in python3 /opt/anaconda3/bin/python3 python3.12; do \
 	command -v $$c >/dev/null 2>&1 && $$c -c "import numpy, pyarrow" >/dev/null 2>&1 && { echo $$c; break; }; \
 done)
 
+SELFCHECK_REPORT ?= reports/ofi_selfcheck.md
+CORR_REPORT ?= reports/feature_correlations.md
+CORR_CSV ?= reports/feature_correlations.csv
+
 export PYTHONPATH := src:$(PYTHONPATH)
 
-.PHONY: data test
+.PHONY: data features correlations selfcheck test
 
 # `data` chains the adapter and the QC report: one command, raw CSVs to a validated event
 # frame with a printed/committed quality report (PLAN.md phase-0 milestone). Make aborts the
@@ -26,6 +31,27 @@ export PYTHONPATH := src:$(PYTHONPATH)
 data:
 	$(PYTHON) -m edge.io.lobster --raw $(RAW_DIR) --out $(OUT_DIR) --seed $(SEED)
 	$(PYTHON) -m edge.io.quality --raw $(RAW_DIR) --frames $(OUT_DIR) --out $(REPORT) --seed $(SEED)
+
+# Phase 1: the six family modules merged into one table per ticker-day-clock
+# (docs/INTERFACE.md sec. 5 / src/edge/features/build.py), then chains straight into the
+# correlation table -- PLAN.md's phase-1 milestone is "features.parquet + a correlation
+# table", not the parquet alone, so `make features` produces both in one command. Same
+# abort-the-whole-target behaviour as `data`: either step exiting non-zero fails the target.
+features:
+	$(PYTHON) -m edge.features.build --frames $(OUT_DIR) --out $(FEATURES_OUT) --seed $(SEED)
+	$(PYTHON) -m edge.analysis.correlations --features $(FEATURES_OUT) --out-md $(CORR_REPORT) --out-csv $(CORR_CSV) --seed $(SEED)
+
+# Standalone re-run of the correlation table alone (e.g. after a `data/features` rebuild
+# done elsewhere) -- same command `features` chains into above.
+correlations:
+	$(PYTHON) -m edge.analysis.correlations --features $(FEATURES_OUT) --out-md $(CORR_REPORT) --out-csv $(CORR_CSV) --seed $(SEED)
+
+# Phase-1 gate (PLAN.md L2 / FEATURES.md sec. 1): reproduce Cont-Kukanov-Stoikov's
+# Delta-mid ~ OFI relation on the built features and fail loudly if it doesn't hold --
+# "if you can't reproduce a 20-year-old linear result, stop and fix the features." Exits
+# non-zero (and Make aborts) on any of the three CKS checks failing, same as `data`.
+selfcheck:
+	$(PYTHON) -m edge.analysis.ofi_selfcheck --features $(FEATURES_OUT) --raw $(RAW_DIR) --out $(SELFCHECK_REPORT) --seed $(SEED)
 
 test:
 	$(PYTHON) -m unittest discover -s tests -v
