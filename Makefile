@@ -20,9 +20,12 @@ export PYTHONPATH := src:$(PYTHONPATH)
 
 .PHONY: data test
 
+# `data` chains the adapter and the QC report: one command, raw CSVs to a validated event
+# frame with a printed/committed quality report (PLAN.md phase-0 milestone). Make aborts the
+# whole target if either step exits non-zero, so a hard QC invariant failure fails `make data`.
 data:
 	$(PYTHON) -m edge.io.lobster --raw $(RAW_DIR) --out $(OUT_DIR) --seed $(SEED)
-	$(PYTHON) -m edge.io.quality --frames $(OUT_DIR) --out $(REPORT) --seed $(SEED)
+	$(PYTHON) -m edge.io.quality --raw $(RAW_DIR) --frames $(OUT_DIR) --out $(REPORT) --seed $(SEED)
 
 test:
 	$(PYTHON) -m unittest discover -s tests -v

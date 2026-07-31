@@ -104,3 +104,22 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   three tasks set to `FEATURES.md` implementation / two-clock construction / rolling-only
   normalization (the first three Phase 1 bullets), per the Phase-0 exit criteria in the
   task brief.
+- 2026-07-30 — U-shape heuristic in `quality.py` replaced: was "first bucket AND last
+  bucket both above the profile median", now "mean event rate over the first and last
+  quartile of bins exceeds the mean over the interior bins". The old rule turned on two
+  single half-hour buckets, so one noisy bucket flipped the verdict — which is exactly what
+  happened to AMZN (open 09:30–10:00 is elevated but not the day's peak, so the old rule
+  said no while the profile is visibly U-shaped). Under the quartile rule both INTC and
+  AMZN report **yes**. This supersedes the "AMZN fails the heuristic" line above; the
+  underlying observation (AMZN's open-of-day surge is weaker than INTC's) still stands and
+  is still visible in the committed profile table. No parser change — event-type counts,
+  crossed-book count and median mid were already all passing.
+- 2026-07-30 — `quality.py` now also takes `--raw` and re-counts the raw message/orderbook
+  CSV lines, making "raw message rows == raw orderbook rows == parquet rows" a hard
+  invariant of `make data` rather than something only the adapter checked internally. Cheap
+  (streamed line count, no second parse) and it catches a truncated or half-written parquet,
+  which the previous report could not.
+- 2026-07-30 — Added `tests/test_quality.py` (16 hand-computed tests over the pure check
+  functions: crossed/locked counting, sentinel rows, ts monotonicity and tie counting, gap
+  ranking, price scaling, intraday binning, U-shape rule). `quality.py`'s docstring already
+  claimed these were unit tested and they were not; suite is now 28 tests, all green.
