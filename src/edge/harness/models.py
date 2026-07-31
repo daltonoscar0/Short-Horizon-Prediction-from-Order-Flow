@@ -49,8 +49,14 @@ L3_FEATURES = (
     "qi_touch", "qi_depth_inv", "qi_l2", "qi_l5",
     # microprice
     "mp_dev_mid", "mp_dev_wmid", "mp_wmid_dev_mid",
-    # trade / aggressor
-    "tr_signed_vol_1s", "tr_aggr_imb_1s", "tr_count_1s", "tr_eff_spread",
+    # Trade / aggressor. NOTE the omission of `tr_aggr_imb_1s`: it is a RATIO, so it is NaN
+    # whenever its window holds no trades -- 84.7% of INTC calendar stamps and 86.5% of
+    # AMZN's. Including it would score L3/L4 on 13% of the sample while L0/L1/L2 kept 100%,
+    # which is not a ladder, it is two different experiments. `tr_signed_vol_1s` and
+    # `tr_count_1s` are SUMS, legitimately 0.0 on a quiet window (INTERFACE.md sec. 7), and
+    # carry the same directional information unnormalised. Chosen on the NaN structure of
+    # the columns, before any fold was scored -- not because it improved a result.
+    "tr_signed_vol_1s", "tr_count_1s", "tr_eff_spread",
     # state / control
     "st_spread_ticks", "st_depth_touch", "st_depth_total",
     "st_rv_1s", "st_event_rate_1s", "st_slope_bid", "st_slope_ask",

@@ -52,7 +52,21 @@ wrong and the deflated Sharpe is a lie.
 
 | # | date | what changed | outcome | kept? |
 |---|---|---|---|---|
-| 1 | | | | |
+| 1 | 2026-07-31 | Phase-1 feature build, 4 (ticker × clock) tables, 257 columns each | bit-reproducible; CKS self-check PASS on all 4 combos | yes |
+| 2 | 2026-07-31 | Univariate correlation triage, 7,264 (feature × label) cells | triage only, explicitly not a result; 480 pairs self-flagged | yes (as triage) |
+| 3 | 2026-07-31 | Deadband α sweep, 5 points {0, 0.25, 0.5, 1, 2} | reported for sensitivity; α frozen at 0.5 BY RULE, not by this sweep | frozen a priori |
+| 4 | 2026-07-31 | OFI self-check regressions, 52 (13 regressors × 4 ticker/clock) | PASS | yes |
+| 5 | 2026-07-31 | Ladder grid: 2 tickers × 2 clocks × 4 horizons × 3 protocols × 6 rungs = **288 fits** | the optimism table | pending adversary |
+| 6 | 2026-07-31 | L3/L4 feature set: dropped `tr_aggr_imb_1s` before scoring any fold | recovered 87% of rows; chosen on NaN structure, not on a result | yes |
+| 7 | 2026-07-31 | Protocol A test universe restricted to match B/C (first attempt tested the market open A-only) | discarded, re-run | no — superseded |
+| 8 | 2026-07-31 | Per-rung row masks replaced by a common mask (first attempt scored L3/L4 on 4,576 rows vs L1/L2's 39,000) | discarded, re-run | no — superseded |
+
+**Honest trial count for the deflated Sharpe: 288** for the ladder grid proper, plus trials 1–4
+above as pre-registered diagnostics rather than model selection. Trials 7 and 8 are *discarded
+harness configurations*, logged because CLAUDE.md rule 4 requires the failures too — both were
+found by reading per-fold row counts, both invalidated their runs, and neither contributed a
+number to any table. Any deflated Sharpe computed at `--trials 1` is undeflated and the report
+says so on its face.
 
 ## Decisions frozen (and when)
 

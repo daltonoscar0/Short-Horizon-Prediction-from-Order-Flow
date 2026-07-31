@@ -346,3 +346,54 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   and carry rho 0.437 against 0.19 for isolated stamps. If Phase 2 cuts folds on STAMP INDEX
   rather than wall clock, a single burst can straddle a boundary and both folds will contain
   the same episode — which would read as optimism and would not be. Folds get cut on time.
+
+## Phase 2 — the three-protocol harness
+
+- 2026-07-31 — Folds are cut on WALL-CLOCK TIME, not stamp index, and the universe is one
+  trading day so EVAL_PROTOCOL.md sec. 1's "split on day boundaries first" is impossible;
+  folds are intraday blocks. Time-cutting is the phase-1 adversary's explicit warning: 32% of
+  INTC event-clock stamps sit within 0.5ms of the previous one and carry ~2.3x the
+  correlation of isolated stamps, so an index cut lets one burst land on both sides of a
+  boundary and both folds then hold the same episode — which reads as optimism and is really
+  duplication. The cost is that per-fold sample counts vary; EVAL_PROTOCOL.md sec. 1 requires
+  reporting the per-fold distribution anyway. `same-day vs next-day` (sec. 5 check 4) cannot
+  be run at all on one day and is recorded as unavailable, not as passed.
+- 2026-07-31 — Purge and embargo compose ADDITIVELY at the left edge: a training sample is
+  kept iff `t + horizon + embargo < test_block_start`. Purge removes label overlap, embargo
+  removes an additional serial-correlation window; they answer two different questions and
+  the conservative composition is the defensible one. The inequality is strict so a label
+  ending exactly on the boundary is still dropped. A right-edge embargo is implemented but
+  cannot bind under expanding walk-forward (all training precedes the test block); it exists
+  so the function stays correct if combinatorial purged CV is added later.
+- 2026-07-31 — All three protocols are SCORED ON THE SAME ROWS. First cut of the harness let
+  protocol A k-fold over every sample while B and C reserved segment 0 as initial training
+  data, so A was additionally tested on the market open — the most volatile and most
+  predictable part of the session — and that difference would have been charged to leakage.
+  A now partitions exactly the universe B and C test, while still TRAINING on everything
+  outside its test fold including segment 0, because training on all available data is what
+  shuffled k-fold actually does. Caught by reading per-fold `n_test` in the first smoke run
+  (A 46,799 vs B/C 39,000), not by a test — the test that asserts it now exists.
+- 2026-07-31 — Every rung is scored on a COMMON usable row mask rather than its own. The
+  ladder's premise is that each rung beats the one below it, which means nothing if the rungs
+  see different samples. First smoke run had L1/L2 on 39,000 test rows and L3/L4 on 4,576 —
+  an 8.5x difference — so the "ladder" was two different experiments. Dominant remaining cost
+  is the block-0 warmup on every fitted column (7.69%, exactly the first refit block: the
+  honest price of a causal fit), which is reported rather than hidden.
+- 2026-07-31 — `tr_aggr_imb_1s` dropped from the L3/L4 feature set. It is a RATIO and is NaN
+  whenever its window holds no trades: 84.7% of INTC calendar stamps, 86.5% of AMZN's (the
+  phase-1 adversary's F6, measured). Keeping it would have cost 87% of the sample for one
+  column. `tr_signed_vol_1s` and `tr_count_1s` are SUMS, legitimately 0.0 on a quiet window
+  (INTERFACE.md sec. 7), and carry the same directional information unnormalised. Chosen on
+  the NaN structure of the columns before any fold was scored, not because it improved a
+  number.
+- 2026-07-31 — Every rung's raw score is mapped into label units by ONE through-origin scale
+  fitted on TRAINING data only, applied uniformly to all rungs. Without it L1 emits a
+  direction in {-1,0,+1} and its R^2 would measure units rather than skill. For any
+  least-squares rung the scale is exactly 1.0 (OLS residuals are orthogonal to fitted values),
+  so it is a no-op for L2 and near-enough for ridge (measured 1.0031); it only puts L1 and L4
+  on a comparable footing, and being rank-preserving it never changes the IC.
+- 2026-07-31 — GBM hyperparameters frozen a priori (200 rounds, lr 0.05, 31 leaves, min 200
+  per leaf, L2 1.0, seeded, single-threaded for determinism) with NO early stopping. Early
+  stopping on a slice of the test fold is itself a leak, and carving a validation slice out of
+  training is one more free parameter to log; a fixed round count is the honest choice and it
+  is the same count under all three protocols.

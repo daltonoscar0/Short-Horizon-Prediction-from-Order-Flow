@@ -196,12 +196,22 @@ class TestProtocolAIsShuffled(unittest.TestCase):
             "every shuffled fold should contain training samples after its first test sample",
         )
 
-    def test_a_test_blocks_partition_the_sample(self):
+    def test_a_test_blocks_partition_the_eligible_universe_exactly_once(self):
+        # A partitions the rows B and C can also test (segments 1..n_folds), NOT all rows:
+        # the walk-forward protocols reserve segment 0 as initial training data, and scoring
+        # A on rows the others never see would confound the optimism gap with a difference
+        # in sample. Within that universe every row is still tested exactly once.
         ts = _uniform_stamps(n=2000)
         folds = make_folds(ts, horizon_ns=1 * NS, protocol="A", n_folds=5, seed=0)
         covered = np.concatenate([f.test_idx for f in folds])
-        self.assertEqual(np.unique(covered).size, ts.shape[0])
-        self.assertEqual(covered.size, ts.shape[0])  # each sample tested exactly once
+        eligible = np.unique(
+            np.concatenate([
+                f.test_idx
+                for f in make_folds(ts, horizon_ns=1 * NS, protocol="C", n_folds=5, seed=0)
+            ])
+        )
+        self.assertEqual(covered.size, eligible.size)          # exactly once, no repeats
+        np.testing.assert_array_equal(np.unique(covered), eligible)
 
     def test_a_is_deterministic_under_a_fixed_seed(self):
         ts = _uniform_stamps(n=2000)
@@ -275,15 +285,33 @@ class TestInvariantsCommonToEveryProtocol(unittest.TestCase):
             make_folds(bad, horizon_ns=self.horizon, protocol="C", n_folds=5, seed=0)
 
     def test_every_protocol_sees_the_same_sample_universe(self):
-        # A, B and C must be scored on the same rows, or the optimism gap is partly a
-        # difference in what was scored rather than how it was split.
+        # A, B and C must be scored on the SAME ROWS, or the optimism gap is partly a
+        # difference in what was scored rather than how it was split. The walk-forward
+        # protocols cannot test on segment 0 (it is their initial training data), and
+        # segment 0 is the market open -- the most volatile part of the session. If A were
+        # allowed to test there, it would be handed an easier sample and the difference
+        # would be charged to leakage.
         tested = {}
         for protocol in ("A", "B", "C"):
             folds = make_folds(
                 self.ts, horizon_ns=self.horizon, protocol=protocol, n_folds=5, seed=0
             )
             tested[protocol] = np.unique(np.concatenate([f.test_idx for f in folds]))
+        np.testing.assert_array_equal(tested["A"], tested["B"])
         np.testing.assert_array_equal(tested["B"], tested["C"])
+
+    def test_protocol_a_still_trains_on_the_initial_segment(self):
+        # A is restricted in what it may TEST on, not in what it may train on: training on
+        # all available data is what shuffled k-fold does, and crippling its training set
+        # would understate the very optimism this project is trying to measure.
+        folds = make_folds(
+            self.ts, horizon_ns=self.horizon, protocol="A", n_folds=5, seed=0
+        )
+        first_test_stamp = min(self.ts[f.test_idx].min() for f in folds)
+        trains_before = any(
+            self.ts[f.train_idx].min() < first_test_stamp for f in folds
+        )
+        self.assertTrue(trains_before)
 
 
 class TestIrregularStampsFromTheEventClock(unittest.TestCase):

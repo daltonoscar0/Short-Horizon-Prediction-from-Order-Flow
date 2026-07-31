@@ -102,10 +102,20 @@ def make_folds(ts_ns, horizon_ns, protocol, n_folds=N_FOLDS, embargo_ns=None, se
         embargo_ns = default_embargo_ns(horizon_ns)
     embargo_ns = int(embargo_ns)
 
-    if protocol == "A":
-        return _shuffled_kfold(n, k=n_folds, seed=seed)
-
     edges = _time_segments(ts, n_folds)
+
+    if protocol == "A":
+        # A must be SCORED ON THE SAME ROWS as B and C, or part of the A->C gap is a
+        # difference in which rows were tested rather than in how they were split. The
+        # walk-forward protocols never test on segment 0 (it is their initial training
+        # data), and segment 0 is the market open -- the most volatile, most predictable
+        # part of the session. Letting A test there would hand it an easier sample and
+        # charge the difference to leakage. So A's test folds partition the SAME universe
+        # B and C test on; A still TRAINS on everything outside its test fold, including
+        # segment 0, because training on all available data is what shuffled k-fold does.
+        eligible = np.flatnonzero(ts >= int(edges[1])).astype(np.int64)
+        return _shuffled_kfold(n, k=n_folds, seed=seed, eligible=eligible)
+
     all_idx = np.arange(n, dtype=np.int64)
     folds = []
     for k in range(n_folds):
@@ -140,12 +150,17 @@ def make_folds(ts_ns, horizon_ns, protocol, n_folds=N_FOLDS, embargo_ns=None, se
     return folds
 
 
-def _shuffled_kfold(n, k, seed):
-    """Protocol A: the pathology, implemented faithfully. Every sample is tested exactly once
-    and training sets contain samples from after the test block -- which is the point."""
+def _shuffled_kfold(n, k, seed, eligible=None):
+    """Protocol A: the pathology, implemented faithfully. Every eligible sample is tested
+    exactly once and training sets contain samples from after the test block -- the point.
+
+    `eligible` restricts which samples may be TESTED (see make_folds); training still draws
+    on every row outside the current test fold.
+    """
     rng = np.random.default_rng(seed)
-    order = rng.permutation(n)
-    bounds = np.linspace(0, n, k + 1).astype(np.int64)
+    pool = np.arange(n, dtype=np.int64) if eligible is None else np.asarray(eligible, dtype=np.int64)
+    order = pool[rng.permutation(pool.shape[0])]
+    bounds = np.linspace(0, pool.shape[0], k + 1).astype(np.int64)
     all_idx = np.arange(n, dtype=np.int64)
     folds = []
     for i in range(k):

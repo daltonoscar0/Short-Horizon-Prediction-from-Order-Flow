@@ -60,15 +60,33 @@ def _classify(y_ticks, alpha=ALPHA_TICKS):
     return out
 
 
-def score_fold(rung, cols, y, fold):
+def common_usable_mask(cols, y, seed=0):
+    """Rows where EVERY rung's features and the label are finite.
+
+    The ladder's premise is that each rung must beat the one below it, which only means
+    something if the rungs are scored on the same rows. Left to per-rung masks, L2 (one OFI
+    column) would be scored on ~92% of stamps and L3/L4 on ~86%, and part of any difference
+    between them would be a difference in sample. INTERFACE.md sec. 7 still puts the drop
+    here in the harness rather than in the family modules; this just makes the drop shared.
+
+    The dominant cost is the block-0 warmup on every fitted column (7.69% -- exactly the
+    first refit block, the honest price of a causal fit), which is reported, not hidden.
+    """
+    needed = sorted({f for r in build_ladder(seed=seed) for f in r.features})
+    mask = np.isfinite(y)
+    for name in needed:
+        mask &= np.isfinite(cols[name])
+    return mask
+
+
+def score_fold(rung, cols, y, fold, common_mask):
     """Fit on the fold's training rows, score its test rows. Returns a metrics dict or None."""
     feats = list(rung.features)
     if feats:
         X_all = np.column_stack([cols[f] for f in feats])
-        usable = np.isfinite(X_all).all(axis=1) & np.isfinite(y)
     else:
         X_all = np.zeros((y.shape[0], 0), dtype=np.float64)
-        usable = np.isfinite(y)
+    usable = common_mask
 
     tr = fold.train_idx[usable[fold.train_idx]]
     te = fold.test_idx[usable[fold.test_idx]]
@@ -98,9 +116,10 @@ def run_cell(cols, y, ts, horizon_ns, protocol, seed, embargo_ns=None, n_folds=N
         ts, horizon_ns=horizon_ns, protocol=protocol,
         n_folds=n_folds, embargo_ns=embargo_ns, seed=seed,
     )
-    out = {}
+    common_mask = common_usable_mask(cols, y, seed=seed)
+    out = {"_common_row_fraction": float(common_mask.mean())}
     for rung in build_ladder(seed=seed):
-        per_fold = [score_fold(rung, cols, y, f) for f in folds]
+        per_fold = [score_fold(rung, cols, y, f, common_mask) for f in folds]
         kept = [r for r in per_fold if r is not None]
         if not kept:
             continue
