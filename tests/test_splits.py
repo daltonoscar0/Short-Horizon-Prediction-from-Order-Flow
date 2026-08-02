@@ -347,3 +347,42 @@ class TestIrregularStampsFromTheEventClock(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestProtocolDControl(unittest.TestCase):
+    """D: C's test blocks, trained on everything outside them, past AND future, no purge.
+
+    D exists to separate two mechanisms the A-B / B-C decomposition conflated: "the model
+    saw the future" (D vs C) from "the model saw rows adjacent to the test rows" (A vs D).
+    """
+
+    def _ts(self, n=1000, step=100_000_000):
+        return (np.arange(n, dtype=np.int64) + 1) * step
+
+    def test_d_test_blocks_are_identical_to_c(self):
+        ts = self._ts()
+        c = make_folds(ts, horizon_ns=1_000_000_000, protocol="C", n_folds=5, seed=0)
+        d = make_folds(ts, horizon_ns=1_000_000_000, protocol="D", n_folds=5, seed=0)
+        self.assertEqual(len(c), len(d))
+        for fc, fd in zip(c, d):
+            np.testing.assert_array_equal(fc.test_idx, fd.test_idx)
+
+    def test_d_trains_on_the_future_where_c_does_not(self):
+        ts = self._ts()
+        d = make_folds(ts, horizon_ns=1_000_000_000, protocol="D", n_folds=5, seed=0)
+        f = d[0]
+        # There must be training rows AFTER the test block -- that is the whole point.
+        self.assertTrue(np.any(f.train_idx > f.test_idx.max()))
+
+    def test_d_train_and_test_are_still_disjoint(self):
+        """D is leaky by design but must not be degenerate: no row is both train and test."""
+        ts = self._ts()
+        for f in make_folds(ts, horizon_ns=1_000_000_000, protocol="D", n_folds=5, seed=0):
+            self.assertEqual(np.intersect1d(f.train_idx, f.test_idx).size, 0)
+
+    def test_d_does_not_purge_so_it_trains_on_more_rows_than_c(self):
+        ts = self._ts()
+        c = make_folds(ts, horizon_ns=1_000_000_000, protocol="C", n_folds=5, seed=0)
+        d = make_folds(ts, horizon_ns=1_000_000_000, protocol="D", n_folds=5, seed=0)
+        for fc, fd in zip(c, d):
+            self.assertGreater(fd.train_idx.size, fc.train_idx.size)

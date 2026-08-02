@@ -158,5 +158,35 @@ class TestDeflatedSharpe(unittest.TestCase):
         self.assertTrue(np.isnan(deflated_sharpe(np.ones(50), n_trials=5)["dsr"]))
 
 
+class TestLinearLossComparesPnLNotMagnitude(unittest.TestCase):
+    """`loss="linear"` treats inputs as losses already. Squaring PnL tests the wrong thing."""
+
+    def test_negative_stat_means_the_first_series_has_the_lower_loss(self):
+        rng = np.random.default_rng(3)
+        # A earns 0.05 ticks/trade more than B, on the same trades.
+        b = rng.normal(0.0, 0.5, size=800)
+        a = b + 0.05
+        dm = diebold_mariano(-a, -b, lag=10, loss="linear")  # loss = -PnL
+        self.assertLess(dm["dm_stat"], 0.0)
+        self.assertAlmostEqual(dm["mean_loss_diff"], -0.05, places=2)
+
+    def test_squared_loss_would_get_the_sign_wrong_on_pnl(self):
+        """The reason the linear mode exists, stated as a test.
+
+        A loses money, B makes money, same magnitude. Squared loss calls them equal; linear
+        loss correctly prefers B.
+        """
+        a = np.full(500, -0.10)   # A loses 0.10/trade
+        b = np.full(500, +0.10)   # B makes 0.10/trade
+        sq = diebold_mariano(-a, -b, lag=5, loss="squared")
+        self.assertAlmostEqual(sq["mean_loss_diff"], 0.0, places=12)  # blind to the sign
+        lin = diebold_mariano(-a, -b, lag=5, loss="linear")
+        self.assertAlmostEqual(lin["mean_loss_diff"], 0.20, places=12)  # A's loss is higher
+
+    def test_unknown_loss_is_rejected(self):
+        with self.assertRaises(ValueError):
+            diebold_mariano(np.ones(20), np.zeros(20), loss="hinge")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -68,8 +68,9 @@ def _hac_variance(d, lag):
 def diebold_mariano(errors_a, errors_b, lag=None, loss="squared"):
     """DM test that model A and model B have equal predictive accuracy.
 
-    `errors_*` are forecast errors (y - yhat) on the SAME rows. Returns the DM statistic and
-    a two-sided p-value; the statistic is negative when A has the lower loss (A is better).
+    `errors_*` are forecast errors (y - yhat) on the SAME rows, or -- with `loss="linear"` --
+    per-observation losses already in the caller's units. Returns the DM statistic and a
+    two-sided p-value; the statistic is negative when A has the lower loss (A is better).
 
     The HAC lag is mandatory rather than optional here: at a 1s horizon on a 100ms grid the
     loss differential is autocorrelated across ~10 neighbouring samples, and the naive
@@ -94,8 +95,13 @@ def diebold_mariano(errors_a, errors_b, lag=None, loss="squared"):
         d = ea ** 2 - eb ** 2
     elif loss == "absolute":
         d = np.abs(ea) - np.abs(eb)
+    elif loss == "linear":
+        # Inputs are ALREADY losses, not errors. The economic comparison needs this: PnL is
+        # not a forecast error, and squaring it would test whether one rung's PnL is larger
+        # in MAGNITUDE, which is the wrong hypothesis. Callers pass -pnl per trade.
+        d = ea - eb
     else:
-        raise ValueError("loss must be 'squared' or 'absolute'")
+        raise ValueError("loss must be 'squared', 'absolute' or 'linear'")
     if lag is None:
         lag = max(1, int(round(n ** (1.0 / 3.0))))
     var = _hac_variance(d, lag)

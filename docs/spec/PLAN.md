@@ -67,20 +67,26 @@ horizon's label, with intraday-seasonality-adjusted versions alongside raw.
 
 Ordered so each rung has to beat the one below it:
 
-- [ ] **L0** — constant/zero predictor; class base rate. (Beating this is not news.)
-- [ ] **L1** — unfitted signs: sign(queue imbalance), sign(microprice − mid). No parameters.
+- [x] **L0** — constant/zero predictor; class base rate. (Beating this is not news.)
+- [x] **L1** — unfitted signs: sign(queue imbalance), sign(microprice − mid). No parameters.
       Surprisingly hard to beat at 1s.
-- [ ] **L2** — OLS of Δmid on best-level OFI (the Cont–Kukanov–Stoikov specification).
+- [x] **L2** — OLS of Δmid on best-level OFI (the Cont–Kukanov–Stoikov specification).
       Recover their result: slope ≈ inversely proportional to depth. If you can't
       reproduce a 20-year-old linear result, stop and fix the features.
-- [ ] **L3** — ridge / logistic on the full handcrafted set (multi-level OFI, integrated
+- [x] **L3** — ridge / logistic on the full handcrafted set (multi-level OFI, integrated
       OFI, queue imbalance, microprice deviation, spread, depth, trade-sign imbalance,
       realized vol, time-of-day).
-- [ ] **L4** — gradient boosting on the same handcrafted set. This is the real bar.
+- [x] **L4** — gradient boosting on the same handcrafted set. This is the real bar.
 
 **Milestone:** the ladder table, per-fold, on both clocks, both tick regimes.
 
-## Phase 3 — LM representations (day 11–15)
+## Phase 3 — LM representations (day 11–15) — **CUT**
+
+> Cut on 2026-07-31: `orderflow-lm` stops at tokenization and no trained checkpoint exists,
+> so there was nothing to probe. The arm was cut rather than faked. It returns as L5/L6
+> against this harness the moment a checkpoint exists — `FUTURE.md` sec. 2. The costs phase
+> below was renumbered to phase 3 in the working vocabulary; this file keeps the original
+> numbering.
 
 - [ ] Extract hidden states from the order-flow LM at each decision timestamp. Fix and
       document the pooling (last token vs mean over the window) and the layer — pick by
@@ -100,20 +106,20 @@ Ordered so each rung has to beat the one below it:
 
 ## Phase 4 — Costs, PnL, and statistics (day 16–19)
 
-- [ ] Transaction-cost-aware simulated PnL per `EVAL_PROTOCOL.md`: latency delay, explicit
+- [x] Transaction-cost-aware simulated PnL per `EVAL_PROTOCOL.md`: latency delay, explicit
       fill model, half-spread crossing, fees.
-- [ ] **Break-even cost table** — the cost per trade at which each rung's PnL hits zero.
+- [x] **Break-even cost table** — the cost per trade at which each rung's PnL hits zero.
       This is the headline figure and the most honest number in the project.
-- [ ] Diebold–Mariano tests between adjacent rungs; block-bootstrap CIs on the metric
+- [x] Diebold–Mariano tests between adjacent rungs; block-bootstrap CIs on the metric
       differences; deflated Sharpe ratio using the logged trial count.
 
 **Milestone:** a PnL section that a QR would not immediately dismiss.
 
 ## Phase 5 — Writeup (day 20–21)
 
-- [ ] `FINDINGS.md`: the claim, the evidence, the failure modes, "what would change my mind".
-- [ ] `README.md` with the headline table and reproduction instructions.
-- [ ] A one-page version for interviews: problem, method, result, what you'd do with more
+- [x] `FINDINGS.md`: the claim, the evidence, the failure modes, "what would change my mind".
+- [x] `README.md` with the headline table and reproduction instructions.
+- [x] A one-page version for interviews: problem, method, result, what you'd do with more
       data — see `INTERVIEW.md`.
 
 **Stretch (only if Phase 3 is a clean result):** cross-asset transfer (train on one name,
@@ -123,18 +129,24 @@ test on another), and the regime split (high-vol vs low-vol hours).
 
 ## Status
 
-- Current phase: 2
-- Next 3 tasks:
-  1. **L0/L1** — constant/base-rate predictor and the unfitted signs (`sign(qi_touch)`,
-     `sign(mp_dev_mid)`). L1 is load-bearing under the new framing: it has no parameters,
-     so a near-zero A→C gap on L1 is what separates a measurement of optimism from an
-     artifact of the harness (`DECISIONS.md` 2026-07-31).
-  2. The hand-written three-protocol splitter (A shuffled k-fold, B unpurged walk-forward,
-     C purged walk-forward with embargo), adversarial tests FIRST per CLAUDE.md rule 2 —
-     the test that fails when a labelled sample straddles a fold boundary gets written
-     before the splitter does.
-  3. **L2** — OLS of Δmid on best-level OFI, reproducing Cont–Kukanov–Stoikov. The
-     standalone `make selfcheck` already clears this on all four ticker/clock combos, so
-     L2 should recover it inside the harness or the harness is wrong.
-- Trials logged so far: 0 (Phase 1 produced no fitted predictions; the correlation table is
-  triage, explicitly not a result)
+**Closed out 2026-08-02.** Phases 0, 1, 2, 4 and 5 are complete; phase 3 (LM representations)
+was cut for want of a checkpoint. The study is written up in `FINDINGS.md`, `README.md`,
+`METHOD.md`, `INTERVIEW.md` and `FUTURE.md`.
+
+- Headline: optimism scales with model capacity (median A−C: L1 +0.003 with no parameters,
+  L4 +0.545 on identical rows), and `B−C` ≈ 0 everywhere — essentially all of it is the
+  shuffle, not label overlap. Under protocol C the ladder inverts: L3 and L4 have negative
+  median R², and the best rung is the parameter-free `sign(queue imbalance)`.
+- Economics: nothing pays. L1 earns 0.0106 ticks per side against ~0.92 ticks of cost, and
+  perfect foresight of the 1s mid move still loses $458 under aggressive fills.
+- Trials logged: **984** (288 ladder + 480 embargo sweep + 216 cost configurations), which
+  deliberately over-counts. See the `RESULTS.md` trial log, including the two discarded
+  harness configurations that invalidated their own runs.
+- Adversary passes: 7, all in `reports/adversary/`. The phase-3 pass demoted this project's
+  own headline column.
+
+Known unmet items, carried in `FUTURE.md` rather than quietly dropped: the calibration slope
+and AUC are implemented and tested but not reported; Giacomini–White for nested rungs is not
+implemented, so the DM p-values are indicative; the passive fill model is dead code in the
+headline path; roughly 52 emitted columns are pinned structurally rather than by a
+hand-computed literal.

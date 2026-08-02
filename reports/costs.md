@@ -1,6 +1,6 @@
 # Transaction costs, PnL and break-even cost (Phase 3)
 
-`python3 -m edge.costs.run --seed 0 --trials 288`
+`python3 -m edge.costs.run --seed 0 --trials 2056 --tickers INTC,AMZN --clocks calendar,event --horizons 1s,5s`
 
 **Protocol C only.** A PnL number computed under a leaky protocol is not a weaker result, it is a misleading one; Phase 2 established which protocol to believe.
 
@@ -9,162 +9,354 @@
 - **Fills are aggressive.** Buying crosses to the ask, selling to the bid, so a round trip pays the FULL spread plus two take fees. Pessimistic by design.
 - **Fees**: $0.0030/share to take, $0.0020/share make rebate — the commonly-quoted 2012 Nasdaq standard rates, entered as an ASSUMPTION and *not* verified against an archived price list. The break-even table is the answer to anyone who disagrees: it reports the cost at which PnL crosses zero, so a reader can substitute their own.
 - **No market impact model.** Stated, not omitted. Ignoring impact biases PnL UPWARD; the break-even table partially absorbs this.
-- **Position**: single unit of 100 shares, no inventory, flat at the horizon. Trades only when |prediction| exceeds the 0.5-tick deadband.
+- **Position**: single unit of 100 shares, no inventory, flat at the horizon. Direction is the SIGN of the prediction — **the deadband is 0**, not the labels' 0.5 ticks. A scaled sign predictor cannot emit a magnitude above half a tick at these horizons, so a 0.5-tick trading threshold took zero trades on every unfitted rung. That change was made after seeing an empty table, which makes it a choice informed by protocol-C output; it is logged in `DECISIONS.md` and the reasoning is a-priori, but it is disclosed here rather than presented as frozen.
 - **Latency**: the signal formed at t acts at t+delta. A signal whose edge is gone by 100ms is latency arbitrage, not alpha — and the phase-1 adversary measured that OFI's content decays inside 100ms, so the 100ms rung is expected to be brutal.
 
-## Break-even cost table (the headline)
+## What the headline column is, and what it is not
 
-The per-share cost at which each rung's PnL crosses zero. Negative means the rung is already underwater before any additional cost — reported, not clipped.
+**`be total (ticks)` is the headline.** It is computed on the GROSS (mid-to-mid) series, so it is the total per-share, per-side cost the signal can bear before it stops paying — inclusive of every cost, which is what lets a reader who rejects the assumed fee schedule substitute their own number.
 
-| ticker | clock | h | rung | latency | trades | total PnL $ | break-even (ticks) | break-even (bps) | PnL CI lo | PnL CI hi | DSR |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| INTC | calendar | 1s | L0 zero | 1ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | calendar | 1s | L0 zero | 10ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | calendar | 1s | L0 zero | 100ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | calendar | 1s | L1 sign(queue imbalance) | 1ms | 17043 | -27105.80 | -0.7952 | -2.94 | -1.5948 | -1.5862 | 0.000 |
-| INTC | calendar | 1s | L1 sign(queue imbalance) | 10ms | 17043 | -27104.80 | -0.7952 | -2.94 | -1.5948 | -1.5862 | 0.000 |
-| INTC | calendar | 1s | L1 sign(queue imbalance) | 100ms | 17043 | -27125.80 | -0.7958 | -2.94 | -1.5962 | -1.5872 | 0.000 |
-| INTC | calendar | 1s | L1m sign(microprice - mid) | 1ms | 17044 | -27239.40 | -0.7991 | -2.95 | -1.6028 | -1.5939 | 0.000 |
-| INTC | calendar | 1s | L1m sign(microprice - mid) | 10ms | 17044 | -27236.40 | -0.7990 | -2.95 | -1.6027 | -1.5935 | 0.000 |
-| INTC | calendar | 1s | L1m sign(microprice - mid) | 100ms | 17044 | -27239.40 | -0.7991 | -2.95 | -1.6031 | -1.5935 | 0.000 |
-| INTC | calendar | 1s | L2 OLS on OFI | 1ms | 17044 | -27349.40 | -0.8023 | -2.97 | -1.6097 | -1.5999 | 0.000 |
-| INTC | calendar | 1s | L2 OLS on OFI | 10ms | 17044 | -27346.40 | -0.8022 | -2.96 | -1.6094 | -1.5996 | 0.000 |
-| INTC | calendar | 1s | L2 OLS on OFI | 100ms | 17044 | -27355.40 | -0.8025 | -2.97 | -1.6097 | -1.6001 | 0.000 |
-| INTC | calendar | 1s | L3 ridge, full set | 1ms | 17044 | -27134.40 | -0.7960 | -2.94 | -1.5968 | -1.5876 | 0.000 |
-| INTC | calendar | 1s | L3 ridge, full set | 10ms | 17044 | -27132.40 | -0.7960 | -2.94 | -1.5967 | -1.5874 | 0.000 |
-| INTC | calendar | 1s | L3 ridge, full set | 100ms | 17044 | -27148.40 | -0.7964 | -2.94 | -1.5977 | -1.5883 | 0.000 |
-| INTC | calendar | 1s | L4 GBM, full set | 1ms | 17044 | -27196.40 | -0.7978 | -2.95 | -1.6006 | -1.5908 | 0.000 |
-| INTC | calendar | 1s | L4 GBM, full set | 10ms | 17044 | -27195.40 | -0.7978 | -2.95 | -1.6005 | -1.5907 | 0.000 |
-| INTC | calendar | 1s | L4 GBM, full set | 100ms | 17044 | -27197.40 | -0.7979 | -2.95 | -1.6007 | -1.5911 | 0.000 |
-| INTC | calendar | 5s | L0 zero | 1ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | calendar | 5s | L0 zero | 10ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | calendar | 5s | L0 zero | 100ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | calendar | 5s | L1 sign(queue imbalance) | 1ms | 3790 | -5838.00 | -0.7702 | -2.85 | -1.5536 | -1.5262 | 0.000 |
-| INTC | calendar | 5s | L1 sign(queue imbalance) | 10ms | 3790 | -5838.00 | -0.7702 | -2.85 | -1.5536 | -1.5262 | 0.000 |
-| INTC | calendar | 5s | L1 sign(queue imbalance) | 100ms | 3790 | -5857.00 | -0.7727 | -2.86 | -1.5583 | -1.5309 | 0.000 |
-| INTC | calendar | 5s | L1m sign(microprice - mid) | 1ms | 3790 | -5941.00 | -0.7838 | -2.90 | -1.5821 | -1.5516 | 0.000 |
-| INTC | calendar | 5s | L1m sign(microprice - mid) | 10ms | 3790 | -5940.00 | -0.7836 | -2.90 | -1.5819 | -1.5510 | 0.000 |
-| INTC | calendar | 5s | L1m sign(microprice - mid) | 100ms | 3790 | -5946.00 | -0.7844 | -2.90 | -1.5833 | -1.5541 | 0.000 |
-| INTC | calendar | 5s | L2 OLS on OFI | 1ms | 3790 | -6057.00 | -0.7991 | -2.95 | -1.6117 | -1.5838 | 0.000 |
-| INTC | calendar | 5s | L2 OLS on OFI | 10ms | 3790 | -6055.00 | -0.7988 | -2.95 | -1.6115 | -1.5832 | 0.000 |
-| INTC | calendar | 5s | L2 OLS on OFI | 100ms | 3790 | -6059.00 | -0.7993 | -2.95 | -1.6127 | -1.5844 | 0.000 |
-| INTC | calendar | 5s | L3 ridge, full set | 1ms | 3790 | -5843.00 | -0.7708 | -2.85 | -1.5561 | -1.5278 | 0.000 |
-| INTC | calendar | 5s | L3 ridge, full set | 10ms | 3790 | -5842.00 | -0.7707 | -2.85 | -1.5557 | -1.5277 | 0.000 |
-| INTC | calendar | 5s | L3 ridge, full set | 100ms | 3790 | -5860.00 | -0.7731 | -2.86 | -1.5609 | -1.5321 | 0.000 |
-| INTC | calendar | 5s | L4 GBM, full set | 1ms | 3790 | -5981.00 | -0.7891 | -2.92 | -1.5929 | -1.5634 | 0.000 |
-| INTC | calendar | 5s | L4 GBM, full set | 10ms | 3790 | -5980.00 | -0.7889 | -2.92 | -1.5926 | -1.5631 | 0.000 |
-| INTC | calendar | 5s | L4 GBM, full set | 100ms | 3790 | -5979.00 | -0.7888 | -2.92 | -1.5926 | -1.5634 | 0.000 |
-| INTC | event | 1s | L0 zero | 1ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | event | 1s | L0 zero | 10ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | event | 1s | L0 zero | 100ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | event | 1s | L1 sign(queue imbalance) | 1ms | 10035 | -15899.00 | -0.7922 | -2.93 | -1.5899 | -1.5773 | 0.000 |
-| INTC | event | 1s | L1 sign(queue imbalance) | 10ms | 9982 | -15865.20 | -0.7947 | -2.94 | -1.5958 | -1.5825 | 0.000 |
-| INTC | event | 1s | L1 sign(queue imbalance) | 100ms | 9504 | -15155.40 | -0.7973 | -2.95 | -1.6007 | -1.5883 | 0.000 |
-| INTC | event | 1s | L1m sign(microprice - mid) | 1ms | 10035 | -16012.00 | -0.7978 | -2.95 | -1.6027 | -1.5888 | 0.000 |
-| INTC | event | 1s | L1m sign(microprice - mid) | 10ms | 9982 | -15959.20 | -0.7994 | -2.95 | -1.6055 | -1.5922 | 0.000 |
-| INTC | event | 1s | L1m sign(microprice - mid) | 100ms | 9504 | -15212.40 | -0.8003 | -2.96 | -1.6071 | -1.5942 | 0.000 |
-| INTC | event | 1s | L2 OLS on OFI | 1ms | 10035 | -16155.00 | -0.8049 | -2.97 | -1.6167 | -1.6031 | 0.000 |
-| INTC | event | 1s | L2 OLS on OFI | 10ms | 9982 | -16066.20 | -0.8048 | -2.97 | -1.6157 | -1.6028 | 0.000 |
-| INTC | event | 1s | L2 OLS on OFI | 100ms | 9504 | -15304.40 | -0.8052 | -2.98 | -1.6166 | -1.6041 | 0.000 |
-| INTC | event | 1s | L3 ridge, full set | 1ms | 10035 | -15916.00 | -0.7930 | -2.93 | -1.5926 | -1.5795 | 0.000 |
-| INTC | event | 1s | L3 ridge, full set | 10ms | 9982 | -15879.20 | -0.7954 | -2.94 | -1.5970 | -1.5843 | 0.000 |
-| INTC | event | 1s | L3 ridge, full set | 100ms | 9504 | -15157.40 | -0.7974 | -2.95 | -1.6011 | -1.5883 | 0.000 |
-| INTC | event | 1s | L4 GBM, full set | 1ms | 10035 | -15930.00 | -0.7937 | -2.93 | -1.5944 | -1.5807 | 0.000 |
-| INTC | event | 1s | L4 GBM, full set | 10ms | 9982 | -15921.20 | -0.7975 | -2.95 | -1.6015 | -1.5883 | 0.000 |
-| INTC | event | 1s | L4 GBM, full set | 100ms | 9504 | -15178.40 | -0.7985 | -2.95 | -1.6041 | -1.5901 | 0.000 |
-| INTC | event | 5s | L0 zero | 1ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | event | 5s | L0 zero | 10ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | event | 5s | L0 zero | 100ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| INTC | event | 5s | L1 sign(queue imbalance) | 1ms | 3261 | -5013.60 | -0.7687 | -2.84 | -1.5535 | -1.5212 | 0.000 |
-| INTC | event | 5s | L1 sign(queue imbalance) | 10ms | 3255 | -5021.00 | -0.7713 | -2.85 | -1.5579 | -1.5276 | 0.000 |
-| INTC | event | 5s | L1 sign(queue imbalance) | 100ms | 3211 | -4983.60 | -0.7760 | -2.87 | -1.5682 | -1.5362 | 0.000 |
-| INTC | event | 5s | L1m sign(microprice - mid) | 1ms | 3261 | -5096.60 | -0.7814 | -2.89 | -1.5798 | -1.5491 | 0.000 |
-| INTC | event | 5s | L1m sign(microprice - mid) | 10ms | 3255 | -5096.00 | -0.7828 | -2.89 | -1.5826 | -1.5521 | 0.000 |
-| INTC | event | 5s | L1m sign(microprice - mid) | 100ms | 3211 | -5039.60 | -0.7847 | -2.90 | -1.5854 | -1.5522 | 0.000 |
-| INTC | event | 5s | L2 OLS on OFI | 1ms | 3261 | -5197.60 | -0.7969 | -2.95 | -1.6109 | -1.5779 | 0.000 |
-| INTC | event | 5s | L2 OLS on OFI | 10ms | 3255 | -5189.00 | -0.7971 | -2.95 | -1.6094 | -1.5782 | 0.000 |
-| INTC | event | 5s | L2 OLS on OFI | 100ms | 3211 | -5100.60 | -0.7942 | -2.94 | -1.6058 | -1.5698 | 0.000 |
-| INTC | event | 5s | L3 ridge, full set | 1ms | 3261 | -5018.60 | -0.7695 | -2.84 | -1.5519 | -1.5245 | 0.000 |
-| INTC | event | 5s | L3 ridge, full set | 10ms | 3255 | -5031.00 | -0.7728 | -2.86 | -1.5592 | -1.5321 | 0.000 |
-| INTC | event | 5s | L3 ridge, full set | 100ms | 3211 | -4979.60 | -0.7754 | -2.87 | -1.5679 | -1.5365 | 0.000 |
-| INTC | event | 5s | L4 GBM, full set | 1ms | 3261 | -5095.60 | -0.7813 | -2.89 | -1.5808 | -1.5462 | 0.000 |
-| INTC | event | 5s | L4 GBM, full set | 10ms | 3255 | -5113.00 | -0.7854 | -2.90 | -1.5883 | -1.5540 | 0.000 |
-| INTC | event | 5s | L4 GBM, full set | 100ms | 3211 | -5062.60 | -0.7883 | -2.91 | -1.5940 | -1.5608 | 0.000 |
-| AMZN | calendar | 1s | L0 zero | 1ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | calendar | 1s | L0 zero | 10ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | calendar | 1s | L0 zero | 100ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | calendar | 1s | L1 sign(queue imbalance) | 1ms | 13986 | -177501.60 | -6.3457 | -2.85 | -12.8681 | -12.4741 | 0.000 |
-| AMZN | calendar | 1s | L1 sign(queue imbalance) | 10ms | 13986 | -177482.60 | -6.3450 | -2.85 | -12.8672 | -12.4737 | 0.000 |
-| AMZN | calendar | 1s | L1 sign(queue imbalance) | 100ms | 13986 | -177399.60 | -6.3420 | -2.85 | -12.8593 | -12.4634 | 0.000 |
-| AMZN | calendar | 1s | L1m sign(microprice - mid) | 1ms | 15458 | -192975.80 | -6.2419 | -2.80 | -12.6464 | -12.3050 | 0.000 |
-| AMZN | calendar | 1s | L1m sign(microprice - mid) | 10ms | 15458 | -192985.80 | -6.2423 | -2.80 | -12.6469 | -12.3067 | 0.000 |
-| AMZN | calendar | 1s | L1m sign(microprice - mid) | 100ms | 15458 | -193087.80 | -6.2456 | -2.80 | -12.6523 | -12.3105 | 0.000 |
-| AMZN | calendar | 1s | L2 OLS on OFI | 1ms | 15458 | -193041.80 | -6.2441 | -2.80 | -12.6516 | -12.3149 | 0.000 |
-| AMZN | calendar | 1s | L2 OLS on OFI | 10ms | 15458 | -193074.80 | -6.2451 | -2.80 | -12.6535 | -12.3158 | 0.000 |
-| AMZN | calendar | 1s | L2 OLS on OFI | 100ms | 15458 | -192911.80 | -6.2399 | -2.80 | -12.6429 | -12.3031 | 0.000 |
-| AMZN | calendar | 1s | L3 ridge, full set | 1ms | 15458 | -192455.80 | -6.2251 | -2.79 | -12.6091 | -12.2717 | 0.000 |
-| AMZN | calendar | 1s | L3 ridge, full set | 10ms | 15458 | -192474.80 | -6.2257 | -2.79 | -12.6118 | -12.2712 | 0.000 |
-| AMZN | calendar | 1s | L3 ridge, full set | 100ms | 15458 | -192474.80 | -6.2257 | -2.79 | -12.6102 | -12.2746 | 0.000 |
-| AMZN | calendar | 1s | L4 GBM, full set | 1ms | 15458 | -192538.80 | -6.2278 | -2.80 | -12.6211 | -12.2756 | 0.000 |
-| AMZN | calendar | 1s | L4 GBM, full set | 10ms | 15458 | -192542.80 | -6.2279 | -2.80 | -12.6191 | -12.2739 | 0.000 |
-| AMZN | calendar | 1s | L4 GBM, full set | 100ms | 15458 | -192466.80 | -6.2255 | -2.79 | -12.6131 | -12.2735 | 0.000 |
-| AMZN | calendar | 5s | L0 zero | 1ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | calendar | 5s | L0 zero | 10ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | calendar | 5s | L0 zero | 100ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | calendar | 5s | L1 sign(queue imbalance) | 1ms | 3308 | -41340.80 | -6.2486 | -2.80 | -13.0524 | -11.9139 | 0.000 |
-| AMZN | calendar | 5s | L1 sign(queue imbalance) | 10ms | 3308 | -41331.80 | -6.2472 | -2.80 | -13.0455 | -11.9124 | 0.000 |
-| AMZN | calendar | 5s | L1 sign(queue imbalance) | 100ms | 3308 | -41442.80 | -6.2640 | -2.81 | -13.0685 | -11.9565 | 0.000 |
-| AMZN | calendar | 5s | L1m sign(microprice - mid) | 1ms | 3674 | -45446.40 | -6.1849 | -2.78 | -12.9007 | -11.8359 | 0.000 |
-| AMZN | calendar | 5s | L1m sign(microprice - mid) | 10ms | 3674 | -45459.40 | -6.1866 | -2.78 | -12.9102 | -11.8429 | 0.000 |
-| AMZN | calendar | 5s | L1m sign(microprice - mid) | 100ms | 3674 | -45615.40 | -6.2079 | -2.79 | -12.9595 | -11.8800 | 0.000 |
-| AMZN | calendar | 5s | L2 OLS on OFI | 1ms | 3674 | -44964.40 | -6.1193 | -2.75 | -12.7437 | -11.7201 | 0.000 |
-| AMZN | calendar | 5s | L2 OLS on OFI | 10ms | 3674 | -44979.40 | -6.1213 | -2.75 | -12.7469 | -11.7224 | 0.000 |
-| AMZN | calendar | 5s | L2 OLS on OFI | 100ms | 3674 | -45112.40 | -6.1394 | -2.76 | -12.7857 | -11.7632 | 0.000 |
-| AMZN | calendar | 5s | L3 ridge, full set | 1ms | 3674 | -44883.40 | -6.1082 | -2.74 | -12.7953 | -11.6999 | 0.000 |
-| AMZN | calendar | 5s | L3 ridge, full set | 10ms | 3674 | -44911.40 | -6.1121 | -2.74 | -12.7983 | -11.7121 | 0.000 |
-| AMZN | calendar | 5s | L3 ridge, full set | 100ms | 3674 | -45023.40 | -6.1273 | -2.75 | -12.8363 | -11.7416 | 0.000 |
-| AMZN | calendar | 5s | L4 GBM, full set | 1ms | 3674 | -45050.40 | -6.1310 | -2.75 | -12.7499 | -11.7625 | 0.000 |
-| AMZN | calendar | 5s | L4 GBM, full set | 10ms | 3674 | -45094.40 | -6.1370 | -2.75 | -12.7596 | -11.7735 | 0.000 |
-| AMZN | calendar | 5s | L4 GBM, full set | 100ms | 3674 | -45213.40 | -6.1532 | -2.76 | -12.7985 | -11.8053 | 0.000 |
-| AMZN | event | 1s | L0 zero | 1ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | event | 1s | L0 zero | 10ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | event | 1s | L0 zero | 100ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | event | 1s | L1 sign(queue imbalance) | 1ms | 7477 | -93970.20 | -6.2840 | -2.82 | -12.7801 | -12.3329 | 0.000 |
-| AMZN | event | 1s | L1 sign(queue imbalance) | 10ms | 7429 | -93759.40 | -6.3104 | -2.83 | -12.8494 | -12.3910 | 0.000 |
-| AMZN | event | 1s | L1 sign(queue imbalance) | 100ms | 7108 | -90320.80 | -6.3535 | -2.85 | -12.9488 | -12.4589 | 0.000 |
-| AMZN | event | 1s | L1m sign(microprice - mid) | 1ms | 8251 | -102412.60 | -6.2061 | -2.79 | -12.6380 | -12.1771 | 0.000 |
-| AMZN | event | 1s | L1m sign(microprice - mid) | 10ms | 8198 | -102132.80 | -6.2291 | -2.80 | -12.6833 | -12.2424 | 0.000 |
-| AMZN | event | 1s | L1m sign(microprice - mid) | 100ms | 7849 | -98480.40 | -6.2734 | -2.82 | -12.7657 | -12.3224 | 0.000 |
-| AMZN | event | 1s | L2 OLS on OFI | 1ms | 8251 | -102769.60 | -6.2277 | -2.80 | -12.6771 | -12.2282 | 0.000 |
-| AMZN | event | 1s | L2 OLS on OFI | 10ms | 8198 | -102427.80 | -6.2471 | -2.80 | -12.7212 | -12.2797 | 0.000 |
-| AMZN | event | 1s | L2 OLS on OFI | 100ms | 7849 | -98535.40 | -6.2769 | -2.82 | -12.7622 | -12.3330 | 0.000 |
-| AMZN | event | 1s | L3 ridge, full set | 1ms | 8251 | -101609.60 | -6.1574 | -2.76 | -12.5295 | -12.0766 | 0.000 |
-| AMZN | event | 1s | L3 ridge, full set | 10ms | 8198 | -101407.80 | -6.1849 | -2.78 | -12.5919 | -12.1417 | 0.000 |
-| AMZN | event | 1s | L3 ridge, full set | 100ms | 7849 | -97739.40 | -6.2262 | -2.79 | -12.6551 | -12.2377 | 0.000 |
-| AMZN | event | 1s | L4 GBM, full set | 1ms | 8251 | -101338.60 | -6.1410 | -2.76 | -12.4975 | -12.0595 | 0.000 |
-| AMZN | event | 1s | L4 GBM, full set | 10ms | 8198 | -101232.80 | -6.1742 | -2.77 | -12.5604 | -12.1263 | 0.000 |
-| AMZN | event | 1s | L4 GBM, full set | 100ms | 7849 | -97531.40 | -6.2130 | -2.79 | -12.6337 | -12.2068 | 0.000 |
-| AMZN | event | 5s | L0 zero | 1ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | event | 5s | L0 zero | 10ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | event | 5s | L0 zero | 100ms | 0 | 0.00 | n/a | n/a | n/a | n/a | n/a |
-| AMZN | event | 5s | L1 sign(queue imbalance) | 1ms | 2673 | -33126.80 | -6.1966 | -2.78 | -12.9867 | -11.7890 | 0.000 |
-| AMZN | event | 5s | L1 sign(queue imbalance) | 10ms | 2668 | -33232.80 | -6.2280 | -2.80 | -13.0570 | -11.8535 | 0.000 |
-| AMZN | event | 5s | L1 sign(queue imbalance) | 100ms | 2629 | -32806.40 | -6.2393 | -2.80 | -13.1012 | -11.8577 | 0.000 |
-| AMZN | event | 5s | L1m sign(microprice - mid) | 1ms | 2966 | -36582.60 | -6.1670 | -2.77 | -12.9434 | -11.8002 | 0.000 |
-| AMZN | event | 5s | L1m sign(microprice - mid) | 10ms | 2961 | -36664.60 | -6.1913 | -2.78 | -12.9871 | -11.8204 | 0.000 |
-| AMZN | event | 5s | L1m sign(microprice - mid) | 100ms | 2916 | -36282.60 | -6.2213 | -2.79 | -13.0141 | -11.8229 | 0.000 |
-| AMZN | event | 5s | L2 OLS on OFI | 1ms | 2966 | -36213.60 | -6.1048 | -2.74 | -12.8152 | -11.7070 | 0.000 |
-| AMZN | event | 5s | L2 OLS on OFI | 10ms | 2961 | -36298.60 | -6.1294 | -2.75 | -12.8271 | -11.7675 | 0.000 |
-| AMZN | event | 5s | L2 OLS on OFI | 100ms | 2916 | -35798.60 | -6.1383 | -2.76 | -12.7756 | -11.7376 | 0.000 |
-| AMZN | event | 5s | L3 ridge, full set | 1ms | 2966 | -35647.60 | -6.0094 | -2.70 | -12.6343 | -11.4882 | 0.000 |
-| AMZN | event | 5s | L3 ridge, full set | 10ms | 2961 | -35797.60 | -6.0448 | -2.71 | -12.6869 | -11.5536 | 0.000 |
-| AMZN | event | 5s | L3 ridge, full set | 100ms | 2916 | -35515.60 | -6.0898 | -2.73 | -12.7421 | -11.5911 | 0.000 |
-| AMZN | event | 5s | L4 GBM, full set | 1ms | 2966 | -35546.60 | -5.9923 | -2.69 | -12.5347 | -11.4623 | 0.000 |
-| AMZN | event | 5s | L4 GBM, full set | 10ms | 2961 | -35675.60 | -6.0242 | -2.70 | -12.5859 | -11.5283 | 0.000 |
-| AMZN | event | 5s | L4 GBM, full set | 100ms | 2916 | -35368.60 | -6.0646 | -2.72 | -12.6330 | -11.5820 | 0.000 |
+**`be incr (ticks)` is the old headline and it is nearly model-invariant.** It is computed on the NET series, so it reports the cost *on top of* a spread already crossed and a fee already paid, and for an always-on strategy that is dominated by the spread. The `CTRL always long` / `CTRL always short` rows are in the table for exactly this reason: the constant controls land INSIDE the ladder's range on that column, so it cannot answer PLAN.md's question. It is retained, demoted, because deleting a column the earlier draft led with would hide the correction.
+
+**`ORACLE perfect foresight` is a bound, not a rung.** It trades the realised sign of the move, i.e. it sees the future. Read it as the ceiling this fill model permits: if the oracle is underwater, no predictor on this ladder could have paid.
+
+## Break-even cost table
+
+Negative means underwater — reported, not clipped. `gross t/trade` is the column that discriminates between rungs; it carries a block-bootstrap CI and the worst of the five folds beside it, per CLAUDE.md rule 4.
+
+| ticker | clock | h | rung | latency | trades | gross t/trade | gross CI lo | gross CI hi | worst fold | be total (ticks) | net PnL $ | mean PnL/trade $ | mean CI lo | mean CI hi | be incr (ticks) | be incr (bps) | DSR gross |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| INTC | calendar | 1s | L0 zero | 1ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | calendar | 1s | L0 zero | 10ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | calendar | 1s | L0 zero | 100ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | calendar | 1s | L1 sign(queue imbalance) | 1ms | 17043 | 0.0213 | 0.0185 | 0.0245 | 0.0123 | 0.0106 | -27105.80 | -1.5904 | -1.5948 | -1.5862 | -0.7952 | -2.95 | 1.000 |
+| INTC | calendar | 1s | L1 sign(queue imbalance) | 10ms | 17043 | 0.0213 | 0.0186 | 0.0245 | 0.0121 | 0.0106 | -27104.80 | -1.5904 | -1.5948 | -1.5862 | -0.7952 | -2.95 | 1.000 |
+| INTC | calendar | 1s | L1 sign(queue imbalance) | 100ms | 17043 | 0.0201 | 0.0176 | 0.0232 | 0.0111 | 0.0100 | -27125.80 | -1.5916 | -1.5962 | -1.5872 | -0.7958 | -2.95 | 1.000 |
+| INTC | calendar | 1s | L1m sign(microprice - mid) | 1ms | 17044 | 0.0135 | 0.0108 | 0.0164 | 0.0069 | 0.0068 | -27239.40 | -1.5982 | -1.6028 | -1.5939 | -0.7991 | -2.96 | 1.000 |
+| INTC | calendar | 1s | L1m sign(microprice - mid) | 10ms | 17044 | 0.0137 | 0.0111 | 0.0166 | 0.0068 | 0.0068 | -27236.40 | -1.5980 | -1.6027 | -1.5935 | -0.7990 | -2.96 | 1.000 |
+| INTC | calendar | 1s | L1m sign(microprice - mid) | 100ms | 17044 | 0.0135 | 0.0110 | 0.0163 | 0.0075 | 0.0068 | -27239.40 | -1.5982 | -1.6031 | -1.5935 | -0.7991 | -2.96 | 1.000 |
+| INTC | calendar | 1s | L2 OLS on OFI | 1ms | 17044 | 0.0071 | 0.0044 | 0.0098 | -0.0001 | 0.0035 | -27349.40 | -1.6046 | -1.6097 | -1.5999 | -0.8023 | -2.97 | 0.940 |
+| INTC | calendar | 1s | L2 OLS on OFI | 10ms | 17044 | 0.0072 | 0.0045 | 0.0100 | -0.0003 | 0.0036 | -27346.40 | -1.6045 | -1.6094 | -1.5996 | -0.8022 | -2.97 | 0.951 |
+| INTC | calendar | 1s | L2 OLS on OFI | 100ms | 17044 | 0.0067 | 0.0041 | 0.0094 | -0.0001 | 0.0034 | -27355.40 | -1.6050 | -1.6097 | -1.6001 | -0.8025 | -2.97 | 0.904 |
+| INTC | calendar | 1s | L3 ridge, full set | 1ms | 17044 | 0.0197 | 0.0171 | 0.0228 | 0.0123 | 0.0098 | -27134.40 | -1.5920 | -1.5968 | -1.5876 | -0.7960 | -2.95 | 1.000 |
+| INTC | calendar | 1s | L3 ridge, full set | 10ms | 17044 | 0.0198 | 0.0172 | 0.0230 | 0.0121 | 0.0099 | -27132.40 | -1.5919 | -1.5967 | -1.5874 | -0.7960 | -2.95 | 1.000 |
+| INTC | calendar | 1s | L3 ridge, full set | 100ms | 17044 | 0.0189 | 0.0161 | 0.0219 | 0.0108 | 0.0094 | -27148.40 | -1.5928 | -1.5977 | -1.5883 | -0.7964 | -2.95 | 1.000 |
+| INTC | calendar | 1s | L4 GBM, full set | 1ms | 17044 | 0.0160 | 0.0135 | 0.0191 | 0.0080 | 0.0080 | -27196.40 | -1.5957 | -1.6006 | -1.5908 | -0.7978 | -2.96 | 1.000 |
+| INTC | calendar | 1s | L4 GBM, full set | 10ms | 17044 | 0.0161 | 0.0136 | 0.0191 | 0.0086 | 0.0080 | -27195.40 | -1.5956 | -1.6005 | -1.5907 | -0.7978 | -2.96 | 1.000 |
+| INTC | calendar | 1s | L4 GBM, full set | 100ms | 17044 | 0.0160 | 0.0134 | 0.0190 | 0.0102 | 0.0080 | -27197.40 | -1.5957 | -1.6007 | -1.5911 | -0.7979 | -2.96 | 1.000 |
+| INTC | calendar | 1s | CTRL always long | 1ms | 17044 | -0.0027 | -0.0055 | 0.0000 | -0.0049 | -0.0014 | -27516.40 | -1.6144 | -1.6190 | -1.6101 | -0.8072 | -2.99 | 0.000 |
+| INTC | calendar | 1s | CTRL always long | 10ms | 17044 | -0.0028 | -0.0054 | -0.0000 | -0.0054 | -0.0014 | -27516.40 | -1.6144 | -1.6191 | -1.6101 | -0.8072 | -2.99 | 0.000 |
+| INTC | calendar | 1s | CTRL always long | 100ms | 17044 | -0.0035 | -0.0060 | -0.0008 | -0.0083 | -0.0017 | -27529.40 | -1.6152 | -1.6200 | -1.6109 | -0.8076 | -2.99 | 0.000 |
+| INTC | calendar | 1s | CTRL always short | 1ms | 17044 | 0.0027 | -0.0000 | 0.0055 | -0.0019 | 0.0014 | -27423.40 | -1.6090 | -1.6139 | -1.6043 | -0.8045 | -2.98 | 0.061 |
+| INTC | calendar | 1s | CTRL always short | 10ms | 17044 | 0.0028 | 0.0000 | 0.0054 | -0.0021 | 0.0014 | -27422.40 | -1.6089 | -1.6139 | -1.6042 | -0.8045 | -2.98 | 0.064 |
+| INTC | calendar | 1s | CTRL always short | 100ms | 17044 | 0.0035 | 0.0008 | 0.0060 | -0.0016 | 0.0017 | -27410.40 | -1.6082 | -1.6131 | -1.6033 | -0.8041 | -2.98 | 0.158 |
+| INTC | calendar | 1s | ORACLE perfect foresight (bound) | 1ms | 618 | 0.9442 | 0.9175 | 0.9717 | 0.9180 | 0.4721 | -457.80 | -0.7408 | -0.7942 | -0.6922 | -0.3704 | -1.37 | 1.000 |
+| INTC | calendar | 1s | ORACLE perfect foresight (bound) | 10ms | 618 | 0.9401 | 0.9138 | 0.9684 | 0.9180 | 0.4701 | -460.80 | -0.7456 | -0.7958 | -0.6955 | -0.3728 | -1.38 | 1.000 |
+| INTC | calendar | 1s | ORACLE perfect foresight (bound) | 100ms | 618 | 0.8608 | 0.8232 | 0.8977 | 0.8242 | 0.4304 | -504.80 | -0.8168 | -0.8735 | -0.7667 | -0.4084 | -1.51 | 1.000 |
+| INTC | calendar | 5s | L0 zero | 1ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | calendar | 5s | L0 zero | 10ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | calendar | 5s | L0 zero | 100ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | calendar | 5s | L1 sign(queue imbalance) | 1ms | 3787 | 0.0706 | 0.0578 | 0.0832 | 0.0442 | 0.0353 | -5835.20 | -1.5409 | -1.5539 | -1.5270 | -0.7704 | -2.86 | 1.000 |
+| INTC | calendar | 5s | L1 sign(queue imbalance) | 10ms | 3787 | 0.0704 | 0.0574 | 0.0829 | 0.0435 | 0.0352 | -5835.20 | -1.5409 | -1.5539 | -1.5270 | -0.7704 | -2.86 | 1.000 |
+| INTC | calendar | 5s | L1 sign(queue imbalance) | 100ms | 3787 | 0.0650 | 0.0518 | 0.0777 | 0.0396 | 0.0325 | -5857.20 | -1.5467 | -1.5596 | -1.5325 | -0.7733 | -2.87 | 1.000 |
+| INTC | calendar | 5s | L1m sign(microprice - mid) | 1ms | 3787 | 0.0440 | 0.0304 | 0.0576 | 0.0178 | 0.0220 | -5936.20 | -1.5675 | -1.5819 | -1.5525 | -0.7838 | -2.91 | 1.000 |
+| INTC | calendar | 5s | L1m sign(microprice - mid) | 10ms | 3787 | 0.0440 | 0.0304 | 0.0576 | 0.0172 | 0.0220 | -5935.20 | -1.5673 | -1.5818 | -1.5519 | -0.7836 | -2.90 | 1.000 |
+| INTC | calendar | 5s | L1m sign(microprice - mid) | 100ms | 3787 | 0.0422 | 0.0294 | 0.0555 | 0.0211 | 0.0211 | -5943.20 | -1.5694 | -1.5836 | -1.5548 | -0.7847 | -2.91 | 0.999 |
+| INTC | calendar | 5s | L2 OLS on OFI | 1ms | 3787 | 0.0139 | 0.0017 | 0.0264 | -0.0073 | 0.0069 | -6050.20 | -1.5976 | -1.6116 | -1.5830 | -0.7988 | -2.96 | 0.082 |
+| INTC | calendar | 5s | L2 OLS on OFI | 10ms | 3787 | 0.0141 | 0.0021 | 0.0267 | -0.0066 | 0.0071 | -6048.20 | -1.5971 | -1.6111 | -1.5826 | -0.7985 | -2.96 | 0.088 |
+| INTC | calendar | 5s | L2 OLS on OFI | 100ms | 3787 | 0.0129 | 0.0004 | 0.0251 | -0.0132 | 0.0065 | -6054.20 | -1.5987 | -1.6119 | -1.5844 | -0.7993 | -2.96 | 0.066 |
+| INTC | calendar | 5s | L3 ridge, full set | 1ms | 3787 | 0.0693 | 0.0564 | 0.0820 | 0.0455 | 0.0347 | -5840.20 | -1.5422 | -1.5568 | -1.5287 | -0.7711 | -2.86 | 1.000 |
+| INTC | calendar | 5s | L3 ridge, full set | 10ms | 3787 | 0.0693 | 0.0563 | 0.0819 | 0.0449 | 0.0347 | -5839.20 | -1.5419 | -1.5563 | -1.5284 | -0.7710 | -2.86 | 1.000 |
+| INTC | calendar | 5s | L3 ridge, full set | 100ms | 3787 | 0.0636 | 0.0508 | 0.0761 | 0.0409 | 0.0318 | -5862.20 | -1.5480 | -1.5630 | -1.5346 | -0.7740 | -2.87 | 1.000 |
+| INTC | calendar | 5s | L4 GBM, full set | 1ms | 3787 | 0.0345 | 0.0203 | 0.0474 | 0.0152 | 0.0172 | -5972.20 | -1.5770 | -1.5926 | -1.5624 | -0.7885 | -2.92 | 0.948 |
+| INTC | calendar | 5s | L4 GBM, full set | 10ms | 3787 | 0.0345 | 0.0205 | 0.0474 | 0.0145 | 0.0172 | -5971.20 | -1.5768 | -1.5925 | -1.5621 | -0.7884 | -2.92 | 0.949 |
+| INTC | calendar | 5s | L4 GBM, full set | 100ms | 3787 | 0.0338 | 0.0204 | 0.0465 | 0.0158 | 0.0169 | -5975.20 | -1.5778 | -1.5939 | -1.5632 | -0.7889 | -2.92 | 0.948 |
+| INTC | calendar | 5s | CTRL always long | 1ms | 3787 | -0.0162 | -0.0300 | -0.0024 | -0.0291 | -0.0081 | -6164.20 | -1.6277 | -1.6441 | -1.6128 | -0.8139 | -3.02 | 0.000 |
+| INTC | calendar | 5s | CTRL always long | 10ms | 3787 | -0.0165 | -0.0302 | -0.0028 | -0.0291 | -0.0083 | -6164.20 | -1.6277 | -1.6441 | -1.6128 | -0.8139 | -3.02 | 0.000 |
+| INTC | calendar | 5s | CTRL always long | 100ms | 3787 | -0.0180 | -0.0312 | -0.0049 | -0.0290 | -0.0090 | -6171.20 | -1.6296 | -1.6462 | -1.6152 | -0.8148 | -3.02 | 0.000 |
+| INTC | calendar | 5s | CTRL always short | 1ms | 3787 | 0.0162 | 0.0024 | 0.0300 | -0.0073 | 0.0081 | -6041.20 | -1.5952 | -1.6102 | -1.5803 | -0.7976 | -2.96 | 0.150 |
+| INTC | calendar | 5s | CTRL always short | 10ms | 3787 | 0.0165 | 0.0028 | 0.0302 | -0.0066 | 0.0083 | -6039.20 | -1.5947 | -1.6098 | -1.5797 | -0.7974 | -2.96 | 0.160 |
+| INTC | calendar | 5s | CTRL always short | 100ms | 3787 | 0.0180 | 0.0049 | 0.0312 | -0.0026 | 0.0090 | -6035.20 | -1.5937 | -1.6082 | -1.5787 | -0.7968 | -2.95 | 0.230 |
+| INTC | calendar | 5s | ORACLE perfect foresight (bound) | 1ms | 531 | 1.0499 | 1.0193 | 1.0791 | 1.0000 | 0.5250 | -319.60 | -0.6019 | -0.6490 | -0.5548 | -0.3009 | -1.12 | 1.000 |
+| INTC | calendar | 5s | ORACLE perfect foresight (bound) | 10ms | 531 | 1.0480 | 1.0155 | 1.0786 | 1.0000 | 0.5240 | -319.60 | -0.6019 | -0.6490 | -0.5548 | -0.3009 | -1.12 | 1.000 |
+| INTC | calendar | 5s | ORACLE perfect foresight (bound) | 100ms | 531 | 1.0141 | 0.9718 | 1.0574 | 0.9342 | 0.5071 | -338.60 | -0.6377 | -0.6933 | -0.5812 | -0.3188 | -1.18 | 1.000 |
+| INTC | event | 1s | L0 zero | 1ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | event | 1s | L0 zero | 10ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | event | 1s | L0 zero | 100ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | event | 1s | L1 sign(queue imbalance) | 1ms | 10035 | 0.0334 | 0.0292 | 0.0384 | 0.0192 | 0.0167 | -15899.00 | -1.5844 | -1.5899 | -1.5773 | -0.7922 | -2.94 | 1.000 |
+| INTC | event | 1s | L1 sign(queue imbalance) | 10ms | 9982 | 0.0265 | 0.0223 | 0.0306 | 0.0148 | 0.0132 | -15865.20 | -1.5894 | -1.5958 | -1.5825 | -0.7947 | -2.95 | 1.000 |
+| INTC | event | 1s | L1 sign(queue imbalance) | 100ms | 9504 | 0.0207 | 0.0164 | 0.0249 | 0.0129 | 0.0103 | -15155.40 | -1.5946 | -1.6007 | -1.5883 | -0.7973 | -2.96 | 1.000 |
+| INTC | event | 1s | L1m sign(microprice - mid) | 1ms | 10035 | 0.0222 | 0.0173 | 0.0268 | 0.0164 | 0.0111 | -16012.00 | -1.5956 | -1.6027 | -1.5888 | -0.7978 | -2.96 | 1.000 |
+| INTC | event | 1s | L1m sign(microprice - mid) | 10ms | 9982 | 0.0171 | 0.0127 | 0.0215 | 0.0132 | 0.0085 | -15959.20 | -1.5988 | -1.6055 | -1.5922 | -0.7994 | -2.96 | 1.000 |
+| INTC | event | 1s | L1m sign(microprice - mid) | 100ms | 9504 | 0.0147 | 0.0105 | 0.0188 | 0.0112 | 0.0073 | -15212.40 | -1.6006 | -1.6071 | -1.5942 | -0.8003 | -2.97 | 1.000 |
+| INTC | event | 1s | L2 OLS on OFI | 1ms | 10035 | 0.0079 | 0.0027 | 0.0126 | -0.0016 | 0.0040 | -16155.00 | -1.6099 | -1.6167 | -1.6031 | -0.8049 | -2.98 | 0.424 |
+| INTC | event | 1s | L2 OLS on OFI | 10ms | 9982 | 0.0064 | 0.0019 | 0.0107 | -0.0005 | 0.0032 | -16066.20 | -1.6095 | -1.6157 | -1.6028 | -0.8048 | -2.98 | 0.276 |
+| INTC | event | 1s | L2 OLS on OFI | 100ms | 9504 | 0.0050 | 0.0008 | 0.0094 | -0.0020 | 0.0025 | -15304.40 | -1.6103 | -1.6166 | -1.6041 | -0.8052 | -2.99 | 0.129 |
+| INTC | event | 1s | L3 ridge, full set | 1ms | 10035 | 0.0317 | 0.0276 | 0.0366 | 0.0199 | 0.0159 | -15916.00 | -1.5860 | -1.5926 | -1.5795 | -0.7930 | -2.94 | 1.000 |
+| INTC | event | 1s | L3 ridge, full set | 10ms | 9982 | 0.0251 | 0.0209 | 0.0297 | 0.0140 | 0.0125 | -15879.20 | -1.5908 | -1.5970 | -1.5843 | -0.7954 | -2.95 | 1.000 |
+| INTC | event | 1s | L3 ridge, full set | 100ms | 9504 | 0.0205 | 0.0162 | 0.0251 | 0.0111 | 0.0102 | -15157.40 | -1.5948 | -1.6011 | -1.5883 | -0.7974 | -2.96 | 1.000 |
+| INTC | event | 1s | L4 GBM, full set | 1ms | 10035 | 0.0303 | 0.0254 | 0.0349 | 0.0175 | 0.0152 | -15930.00 | -1.5874 | -1.5944 | -1.5807 | -0.7937 | -2.94 | 1.000 |
+| INTC | event | 1s | L4 GBM, full set | 10ms | 9982 | 0.0209 | 0.0166 | 0.0252 | 0.0104 | 0.0104 | -15921.20 | -1.5950 | -1.6015 | -1.5883 | -0.7975 | -2.96 | 1.000 |
+| INTC | event | 1s | L4 GBM, full set | 100ms | 9504 | 0.0183 | 0.0138 | 0.0227 | 0.0106 | 0.0091 | -15178.40 | -1.5971 | -1.6041 | -1.5901 | -0.7985 | -2.96 | 1.000 |
+| INTC | event | 1s | CTRL always long | 1ms | 10035 | -0.0063 | -0.0111 | -0.0015 | -0.0130 | -0.0032 | -16298.00 | -1.6241 | -1.6307 | -1.6173 | -0.8121 | -3.01 | 0.000 |
+| INTC | event | 1s | CTRL always long | 10ms | 9982 | -0.0056 | -0.0099 | -0.0011 | -0.0131 | -0.0028 | -16185.20 | -1.6214 | -1.6284 | -1.6150 | -0.8107 | -3.01 | 0.000 |
+| INTC | event | 1s | CTRL always long | 100ms | 9504 | -0.0046 | -0.0089 | -0.0008 | -0.0119 | -0.0023 | -15395.40 | -1.6199 | -1.6262 | -1.6135 | -0.8099 | -3.00 | 0.000 |
+| INTC | event | 1s | CTRL always short | 1ms | 10035 | 0.0063 | 0.0015 | 0.0111 | -0.0022 | 0.0032 | -16171.00 | -1.6115 | -1.6189 | -1.6047 | -0.8057 | -2.99 | 0.197 |
+| INTC | event | 1s | CTRL always short | 10ms | 9982 | 0.0056 | 0.0011 | 0.0099 | -0.0011 | 0.0028 | -16074.20 | -1.6103 | -1.6164 | -1.6036 | -0.8052 | -2.99 | 0.169 |
+| INTC | event | 1s | CTRL always short | 100ms | 9504 | 0.0046 | 0.0008 | 0.0089 | -0.0020 | 0.0023 | -15308.40 | -1.6107 | -1.6174 | -1.6046 | -0.8054 | -2.99 | 0.092 |
+| INTC | event | 1s | ORACLE perfect foresight (bound) | 1ms | 661 | 0.8850 | 0.8548 | 0.9149 | 0.8134 | 0.4425 | -543.60 | -0.8224 | -0.8625 | -0.7785 | -0.4112 | -1.52 | 1.000 |
+| INTC | event | 1s | ORACLE perfect foresight (bound) | 10ms | 660 | 0.7220 | 0.6814 | 0.7614 | 0.6408 | 0.3610 | -631.00 | -0.9561 | -1.0030 | -0.9106 | -0.4780 | -1.77 | 1.000 |
+| INTC | event | 1s | ORACLE perfect foresight (bound) | 100ms | 628 | 0.5756 | 0.5311 | 0.6210 | 0.5033 | 0.2878 | -689.80 | -1.0984 | -1.1494 | -1.0427 | -0.5492 | -2.04 | 1.000 |
+| INTC | event | 5s | L0 zero | 1ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | event | 5s | L0 zero | 10ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | event | 5s | L0 zero | 100ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| INTC | event | 5s | L1 sign(queue imbalance) | 1ms | 3261 | 0.0767 | 0.0618 | 0.0915 | 0.0517 | 0.0383 | -5013.60 | -1.5374 | -1.5535 | -1.5212 | -0.7687 | -2.85 | 1.000 |
+| INTC | event | 5s | L1 sign(queue imbalance) | 10ms | 3255 | 0.0694 | 0.0551 | 0.0844 | 0.0518 | 0.0347 | -5021.00 | -1.5425 | -1.5579 | -1.5276 | -0.7713 | -2.86 | 1.000 |
+| INTC | event | 5s | L1 sign(queue imbalance) | 100ms | 3211 | 0.0610 | 0.0469 | 0.0758 | 0.0455 | 0.0305 | -4983.60 | -1.5520 | -1.5682 | -1.5362 | -0.7760 | -2.88 | 1.000 |
+| INTC | event | 5s | L1m sign(microprice - mid) | 1ms | 3261 | 0.0512 | 0.0360 | 0.0649 | 0.0282 | 0.0256 | -5096.60 | -1.5629 | -1.5798 | -1.5491 | -0.7814 | -2.90 | 1.000 |
+| INTC | event | 5s | L1m sign(microprice - mid) | 10ms | 3255 | 0.0464 | 0.0317 | 0.0595 | 0.0267 | 0.0232 | -5096.00 | -1.5656 | -1.5826 | -1.5521 | -0.7828 | -2.90 | 0.998 |
+| INTC | event | 5s | L1m sign(microprice - mid) | 100ms | 3211 | 0.0436 | 0.0307 | 0.0603 | 0.0184 | 0.0218 | -5039.60 | -1.5695 | -1.5854 | -1.5522 | -0.7847 | -2.91 | 0.994 |
+| INTC | event | 5s | L2 OLS on OFI | 1ms | 3261 | 0.0202 | 0.0053 | 0.0345 | -0.0094 | 0.0101 | -5197.60 | -1.5939 | -1.6109 | -1.5779 | -0.7969 | -2.95 | 0.208 |
+| INTC | event | 5s | L2 OLS on OFI | 10ms | 3255 | 0.0178 | 0.0029 | 0.0319 | -0.0110 | 0.0089 | -5189.00 | -1.5942 | -1.6094 | -1.5782 | -0.7971 | -2.95 | 0.137 |
+| INTC | event | 5s | L2 OLS on OFI | 100ms | 3211 | 0.0246 | 0.0103 | 0.0427 | 0.0024 | 0.0123 | -5100.60 | -1.5885 | -1.6058 | -1.5698 | -0.7942 | -2.94 | 0.449 |
+| INTC | event | 5s | L3 ridge, full set | 1ms | 3261 | 0.0751 | 0.0629 | 0.0880 | 0.0517 | 0.0376 | -5018.60 | -1.5390 | -1.5519 | -1.5245 | -0.7695 | -2.85 | 1.000 |
+| INTC | event | 5s | L3 ridge, full set | 10ms | 3255 | 0.0664 | 0.0541 | 0.0792 | 0.0487 | 0.0332 | -5031.00 | -1.5456 | -1.5592 | -1.5321 | -0.7728 | -2.86 | 1.000 |
+| INTC | event | 5s | L3 ridge, full set | 100ms | 3211 | 0.0623 | 0.0466 | 0.0762 | 0.0421 | 0.0311 | -4979.60 | -1.5508 | -1.5679 | -1.5365 | -0.7754 | -2.87 | 1.000 |
+| INTC | event | 5s | L4 GBM, full set | 1ms | 3261 | 0.0515 | 0.0356 | 0.0669 | 0.0125 | 0.0258 | -5095.60 | -1.5626 | -1.5808 | -1.5462 | -0.7813 | -2.90 | 1.000 |
+| INTC | event | 5s | L4 GBM, full set | 10ms | 3255 | 0.0412 | 0.0255 | 0.0566 | 0.0110 | 0.0206 | -5113.00 | -1.5708 | -1.5883 | -1.5540 | -0.7854 | -2.91 | 0.983 |
+| INTC | event | 5s | L4 GBM, full set | 100ms | 3211 | 0.0364 | 0.0215 | 0.0506 | 0.0168 | 0.0182 | -5062.60 | -1.5766 | -1.5940 | -1.5608 | -0.7883 | -2.92 | 0.931 |
+| INTC | event | 5s | CTRL always long | 1ms | 3261 | -0.0209 | -0.0368 | -0.0057 | -0.0416 | -0.0104 | -5331.60 | -1.6350 | -1.6515 | -1.6181 | -0.8175 | -3.03 | 0.000 |
+| INTC | event | 5s | CTRL always long | 10ms | 3255 | -0.0203 | -0.0345 | -0.0055 | -0.0386 | -0.0101 | -5313.00 | -1.6323 | -1.6484 | -1.6160 | -0.8161 | -3.03 | 0.000 |
+| INTC | event | 5s | CTRL always long | 100ms | 3211 | -0.0202 | -0.0368 | -0.0060 | -0.0374 | -0.0101 | -5244.60 | -1.6333 | -1.6505 | -1.6187 | -0.8167 | -3.03 | 0.000 |
+| INTC | event | 5s | CTRL always short | 1ms | 3261 | 0.0209 | 0.0057 | 0.0368 | -0.0047 | 0.0104 | -5195.60 | -1.5933 | -1.6107 | -1.5765 | -0.7966 | -2.95 | 0.233 |
+| INTC | event | 5s | CTRL always short | 10ms | 3255 | 0.0203 | 0.0055 | 0.0345 | -0.0063 | 0.0101 | -5181.00 | -1.5917 | -1.6077 | -1.5768 | -0.7959 | -2.95 | 0.224 |
+| INTC | event | 5s | CTRL always short | 100ms | 3211 | 0.0202 | 0.0060 | 0.0368 | -0.0008 | 0.0101 | -5114.60 | -1.5928 | -1.6101 | -1.5749 | -0.7964 | -2.95 | 0.233 |
+| INTC | event | 5s | ORACLE perfect foresight (bound) | 1ms | 531 | 1.0330 | 1.0038 | 1.0617 | 1.0045 | 0.5165 | -335.60 | -0.6320 | -0.6791 | -0.5868 | -0.3160 | -1.17 | 1.000 |
+| INTC | event | 5s | ORACLE perfect foresight (bound) | 10ms | 529 | 0.9877 | 0.9565 | 1.0222 | 0.9591 | 0.4939 | -351.40 | -0.6643 | -0.7115 | -0.6151 | -0.3321 | -1.23 | 1.000 |
+| INTC | event | 5s | ORACLE perfect foresight (bound) | 100ms | 524 | 0.9342 | 0.8903 | 0.9766 | 0.8701 | 0.4671 | -377.40 | -0.7202 | -0.7718 | -0.6668 | -0.3601 | -1.33 | 1.000 |
+| AMZN | calendar | 1s | L0 zero | 1ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | calendar | 1s | L0 zero | 10ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | calendar | 1s | L0 zero | 100ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | calendar | 1s | L1 sign(queue imbalance) | 1ms | 13985 | 0.1147 | 0.0858 | 0.1445 | 0.0605 | 0.0573 | -177486.00 | -12.6912 | -12.8674 | -12.4721 | -6.3456 | -2.85 | 1.000 |
+| AMZN | calendar | 1s | L1 sign(queue imbalance) | 10ms | 13985 | 0.1153 | 0.0872 | 0.1434 | 0.0591 | 0.0577 | -177467.00 | -12.6898 | -12.8657 | -12.4692 | -6.3449 | -2.85 | 1.000 |
+| AMZN | calendar | 1s | L1 sign(queue imbalance) | 100ms | 13985 | 0.1123 | 0.0809 | 0.1431 | 0.0507 | 0.0561 | -177375.00 | -12.6832 | -12.8562 | -12.4644 | -6.3416 | -2.85 | 1.000 |
+| AMZN | calendar | 1s | L1m sign(microprice - mid) | 1ms | 15456 | 0.0917 | 0.0641 | 0.1191 | 0.0123 | 0.0459 | -192947.60 | -12.4837 | -12.6465 | -12.3082 | -6.2418 | -2.80 | 0.999 |
+| AMZN | calendar | 1s | L1m sign(microprice - mid) | 10ms | 15456 | 0.0900 | 0.0614 | 0.1176 | 0.0085 | 0.0450 | -192957.60 | -12.4843 | -12.6465 | -12.3080 | -6.2422 | -2.80 | 0.998 |
+| AMZN | calendar | 1s | L1m sign(microprice - mid) | 100ms | 15456 | 0.0797 | 0.0507 | 0.1085 | 0.0175 | 0.0399 | -193050.60 | -12.4903 | -12.6530 | -12.3125 | -6.2452 | -2.81 | 0.979 |
+| AMZN | calendar | 1s | L2 OLS on OFI | 1ms | 15456 | 0.0875 | 0.0587 | 0.1164 | 0.0310 | 0.0438 | -193012.60 | -12.4879 | -12.6511 | -12.3157 | -6.2439 | -2.81 | 0.997 |
+| AMZN | calendar | 1s | L2 OLS on OFI | 10ms | 15456 | 0.0843 | 0.0550 | 0.1126 | 0.0330 | 0.0422 | -193045.60 | -12.4900 | -12.6514 | -12.3174 | -6.2450 | -2.81 | 0.995 |
+| AMZN | calendar | 1s | L2 OLS on OFI | 100ms | 15456 | 0.0911 | 0.0616 | 0.1181 | 0.0142 | 0.0455 | -192875.60 | -12.4790 | -12.6373 | -12.3054 | -6.2395 | -2.80 | 0.998 |
+| AMZN | calendar | 1s | L3 ridge, full set | 1ms | 15456 | 0.1255 | 0.0989 | 0.1549 | 0.0626 | 0.0627 | -192425.60 | -12.4499 | -12.6099 | -12.2670 | -6.2249 | -2.80 | 1.000 |
+| AMZN | calendar | 1s | L3 ridge, full set | 10ms | 15456 | 0.1232 | 0.0963 | 0.1519 | 0.0576 | 0.0616 | -192444.60 | -12.4511 | -12.6126 | -12.2685 | -6.2256 | -2.80 | 1.000 |
+| AMZN | calendar | 1s | L3 ridge, full set | 100ms | 15456 | 0.1194 | 0.0908 | 0.1474 | 0.0470 | 0.0597 | -192437.60 | -12.4507 | -12.6095 | -12.2774 | -6.2253 | -2.80 | 1.000 |
+| AMZN | calendar | 1s | L4 GBM, full set | 1ms | 15456 | 0.1201 | 0.0908 | 0.1451 | 0.0352 | 0.0600 | -192509.60 | -12.4553 | -12.6182 | -12.2794 | -6.2277 | -2.80 | 1.000 |
+| AMZN | calendar | 1s | L4 GBM, full set | 10ms | 15456 | 0.1188 | 0.0904 | 0.1433 | 0.0349 | 0.0594 | -192513.60 | -12.4556 | -12.6154 | -12.2773 | -6.2278 | -2.80 | 1.000 |
+| AMZN | calendar | 1s | L4 GBM, full set | 100ms | 15456 | 0.1197 | 0.0936 | 0.1469 | 0.0561 | 0.0598 | -192433.60 | -12.4504 | -12.6094 | -12.2776 | -6.2252 | -2.80 | 1.000 |
+| AMZN | calendar | 1s | CTRL always long | 1ms | 15456 | -0.0194 | -0.0483 | 0.0068 | -0.0347 | -0.0097 | -194664.60 | -12.5948 | -12.7612 | -12.4111 | -6.2974 | -2.83 | 0.000 |
+| AMZN | calendar | 1s | CTRL always long | 10ms | 15456 | -0.0178 | -0.0462 | 0.0094 | -0.0344 | -0.0089 | -194623.60 | -12.5921 | -12.7600 | -12.4077 | -6.2961 | -2.83 | 0.000 |
+| AMZN | calendar | 1s | CTRL always long | 100ms | 15456 | -0.0209 | -0.0501 | 0.0082 | -0.0429 | -0.0105 | -194606.60 | -12.5910 | -12.7536 | -12.4061 | -6.2955 | -2.83 | 0.000 |
+| AMZN | calendar | 1s | CTRL always short | 1ms | 15456 | 0.0194 | -0.0068 | 0.0483 | 0.0077 | 0.0097 | -194065.60 | -12.5560 | -12.7224 | -12.3781 | -6.2780 | -2.82 | 0.018 |
+| AMZN | calendar | 1s | CTRL always short | 10ms | 15456 | 0.0178 | -0.0094 | 0.0462 | 0.0003 | 0.0089 | -194074.60 | -12.5566 | -12.7205 | -12.3775 | -6.2783 | -2.82 | 0.014 |
+| AMZN | calendar | 1s | CTRL always short | 100ms | 15456 | 0.0209 | -0.0082 | 0.0501 | -0.0095 | 0.0105 | -193959.60 | -12.5491 | -12.7129 | -12.3757 | -6.2746 | -2.82 | 0.022 |
+| AMZN | calendar | 1s | ORACLE perfect foresight (bound) | 1ms | 4801 | 2.1745 | 2.1029 | 2.2411 | 2.0788 | 1.0873 | -49430.60 | -10.2959 | -10.5062 | -10.0500 | -5.1479 | -2.31 | 1.000 |
+| AMZN | calendar | 1s | ORACLE perfect foresight (bound) | 10ms | 4801 | 2.1428 | 2.0712 | 2.2080 | 2.0343 | 1.0714 | -49574.60 | -10.3259 | -10.5416 | -10.0824 | -5.1629 | -2.32 | 1.000 |
+| AMZN | calendar | 1s | ORACLE perfect foresight (bound) | 100ms | 4801 | 1.9834 | 1.9063 | 2.0526 | 1.9202 | 0.9917 | -50331.60 | -10.4836 | -10.6979 | -10.2281 | -5.2418 | -2.35 | 1.000 |
+| AMZN | calendar | 5s | L0 zero | 1ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | calendar | 5s | L0 zero | 10ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | calendar | 5s | L0 zero | 100ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | calendar | 5s | L1 sign(queue imbalance) | 1ms | 3307 | 0.2236 | 0.0514 | 0.3684 | -0.1728 | 0.1118 | -41321.20 | -12.4951 | -13.0485 | -11.9178 | -6.2475 | -2.81 | 0.402 |
+| AMZN | calendar | 5s | L1 sign(queue imbalance) | 10ms | 3307 | 0.2283 | 0.0572 | 0.3736 | -0.1644 | 0.1142 | -41312.20 | -12.4923 | -13.0435 | -11.9191 | -6.2462 | -2.81 | 0.428 |
+| AMZN | calendar | 5s | L1 sign(queue imbalance) | 100ms | 3307 | 0.2032 | 0.0329 | 0.3484 | -0.2120 | 0.1016 | -41421.20 | -12.5253 | -13.0670 | -11.9635 | -6.2627 | -2.81 | 0.288 |
+| AMZN | calendar | 5s | L1m sign(microprice - mid) | 1ms | 3672 | 0.1430 | -0.0118 | 0.2891 | -0.1667 | 0.0715 | -45420.20 | -12.3693 | -12.9048 | -11.8500 | -6.1847 | -2.78 | 0.096 |
+| AMZN | calendar | 5s | L1m sign(microprice - mid) | 10ms | 3672 | 0.1423 | -0.0114 | 0.2909 | -0.1796 | 0.0711 | -45433.20 | -12.3729 | -12.9146 | -11.8541 | -6.1864 | -2.78 | 0.095 |
+| AMZN | calendar | 5s | L1m sign(microprice - mid) | 100ms | 3672 | 0.1104 | -0.0306 | 0.2625 | -0.2247 | 0.0552 | -45585.20 | -12.4143 | -12.9617 | -11.8925 | -6.2071 | -2.79 | 0.036 |
+| AMZN | calendar | 5s | L2 OLS on OFI | 1ms | 3672 | 0.2745 | 0.1428 | 0.3986 | 0.1565 | 0.1373 | -44937.20 | -12.2378 | -12.7538 | -11.7162 | -6.1189 | -2.75 | 0.771 |
+| AMZN | calendar | 5s | L2 OLS on OFI | 10ms | 3672 | 0.2730 | 0.1436 | 0.3962 | 0.1537 | 0.1365 | -44953.20 | -12.2422 | -12.7554 | -11.7186 | -6.1211 | -2.75 | 0.762 |
+| AMZN | calendar | 5s | L2 OLS on OFI | 100ms | 3672 | 0.2463 | 0.1213 | 0.3658 | 0.1482 | 0.1232 | -45086.20 | -12.2784 | -12.7983 | -11.7520 | -6.1392 | -2.76 | 0.609 |
+| AMZN | calendar | 5s | L3 ridge, full set | 1ms | 3672 | 0.2868 | 0.1643 | 0.4328 | 0.0436 | 0.1434 | -44892.20 | -12.2255 | -12.8084 | -11.6959 | -6.1128 | -2.75 | 0.815 |
+| AMZN | calendar | 5s | L3 ridge, full set | 10ms | 3672 | 0.2820 | 0.1588 | 0.4294 | 0.0315 | 0.1410 | -44920.20 | -12.2332 | -12.8156 | -11.7079 | -6.1166 | -2.75 | 0.793 |
+| AMZN | calendar | 5s | L3 ridge, full set | 100ms | 3672 | 0.2635 | 0.1430 | 0.4115 | 0.0336 | 0.1317 | -45023.20 | -12.2612 | -12.8481 | -11.7402 | -6.1306 | -2.75 | 0.699 |
+| AMZN | calendar | 5s | L4 GBM, full set | 1ms | 3672 | 0.2459 | 0.1110 | 0.3832 | -0.0034 | 0.1230 | -45042.20 | -12.2664 | -12.7629 | -11.7631 | -6.1332 | -2.76 | 0.607 |
+| AMZN | calendar | 5s | L4 GBM, full set | 10ms | 3672 | 0.2368 | 0.1001 | 0.3749 | -0.0208 | 0.1184 | -45086.20 | -12.2784 | -12.7753 | -11.7785 | -6.1392 | -2.76 | 0.551 |
+| AMZN | calendar | 5s | L4 GBM, full set | 100ms | 3672 | 0.2158 | 0.0813 | 0.3530 | -0.0416 | 0.1079 | -45198.20 | -12.3089 | -12.8083 | -11.8080 | -6.1544 | -2.76 | 0.417 |
+| AMZN | calendar | 5s | CTRL always long | 1ms | 3672 | -0.1078 | -0.2543 | 0.0488 | -0.1667 | -0.0539 | -46341.20 | -12.6202 | -13.1191 | -12.1079 | -6.3101 | -2.83 | 0.000 |
+| AMZN | calendar | 5s | CTRL always long | 10ms | 3672 | -0.1039 | -0.2497 | 0.0470 | -0.1523 | -0.0519 | -46337.20 | -12.6191 | -13.1163 | -12.1061 | -6.3095 | -2.83 | 0.000 |
+| AMZN | calendar | 5s | CTRL always long | 100ms | 3672 | -0.0840 | -0.2336 | 0.0724 | -0.1318 | -0.0420 | -46299.20 | -12.6087 | -13.0970 | -12.1025 | -6.3044 | -2.83 | 0.000 |
+| AMZN | calendar | 5s | CTRL always short | 1ms | 3672 | 0.1078 | -0.0488 | 0.2543 | 0.0069 | 0.0539 | -45549.20 | -12.4045 | -12.8969 | -11.8831 | -6.2022 | -2.79 | 0.034 |
+| AMZN | calendar | 5s | CTRL always short | 10ms | 3672 | 0.1039 | -0.0470 | 0.2497 | 0.0097 | 0.0519 | -45574.20 | -12.4113 | -12.9053 | -11.8908 | -6.2056 | -2.79 | 0.029 |
+| AMZN | calendar | 5s | CTRL always short | 100ms | 3672 | 0.0840 | -0.0724 | 0.2336 | 0.0041 | 0.0420 | -45682.20 | -12.4407 | -12.9405 | -11.9264 | -6.2203 | -2.79 | 0.014 |
+| AMZN | calendar | 5s | ORACLE perfect foresight (bound) | 1ms | 2541 | 3.3550 | 3.2049 | 3.5409 | 3.0407 | 1.6775 | -23129.60 | -9.1026 | -9.6318 | -8.5488 | -4.5513 | -2.04 | 1.000 |
+| AMZN | calendar | 5s | ORACLE perfect foresight (bound) | 10ms | 2541 | 3.3479 | 3.1971 | 3.5319 | 3.0257 | 1.6739 | -23161.60 | -9.1152 | -9.6481 | -8.5638 | -4.5576 | -2.05 | 1.000 |
+| AMZN | calendar | 5s | ORACLE perfect foresight (bound) | 100ms | 2541 | 3.2918 | 3.1312 | 3.4701 | 2.9861 | 1.6459 | -23350.60 | -9.1895 | -9.7146 | -8.6468 | -4.5948 | -2.06 | 1.000 |
+| AMZN | event | 1s | L0 zero | 1ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | event | 1s | L0 zero | 10ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | event | 1s | L0 zero | 100ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | event | 1s | L1 sign(queue imbalance) | 1ms | 7477 | 0.2225 | 0.1772 | 0.2758 | 0.1024 | 0.1113 | -93970.20 | -12.5679 | -12.7801 | -12.3329 | -6.2840 | -2.82 | 1.000 |
+| AMZN | event | 1s | L1 sign(queue imbalance) | 10ms | 7429 | 0.1939 | 0.1413 | 0.2419 | 0.0801 | 0.0970 | -93759.40 | -12.6207 | -12.8494 | -12.3910 | -6.3104 | -2.83 | 1.000 |
+| AMZN | event | 1s | L1 sign(queue imbalance) | 100ms | 7108 | 0.1458 | 0.1012 | 0.1994 | 0.0693 | 0.0729 | -90320.80 | -12.7069 | -12.9488 | -12.4589 | -6.3535 | -2.85 | 0.997 |
+| AMZN | event | 1s | L1m sign(microprice - mid) | 1ms | 8251 | 0.1777 | 0.1318 | 0.2297 | 0.1001 | 0.0889 | -102412.60 | -12.4121 | -12.6380 | -12.1771 | -6.2061 | -2.79 | 1.000 |
+| AMZN | event | 1s | L1m sign(microprice - mid) | 10ms | 8198 | 0.1545 | 0.1089 | 0.2034 | 0.0826 | 0.0773 | -102132.80 | -12.4583 | -12.6833 | -12.2424 | -6.2291 | -2.80 | 0.998 |
+| AMZN | event | 1s | L1m sign(microprice - mid) | 100ms | 7849 | 0.1082 | 0.0585 | 0.1558 | 0.0332 | 0.0541 | -98480.40 | -12.5469 | -12.7657 | -12.3224 | -6.2734 | -2.82 | 0.906 |
+| AMZN | event | 1s | L2 OLS on OFI | 1ms | 8251 | 0.1345 | 0.0812 | 0.1812 | 0.0506 | 0.0672 | -102769.60 | -12.4554 | -12.6771 | -12.2282 | -6.2277 | -2.80 | 0.969 |
+| AMZN | event | 1s | L2 OLS on OFI | 10ms | 8198 | 0.1186 | 0.0740 | 0.1652 | 0.0433 | 0.0593 | -102427.80 | -12.4942 | -12.7212 | -12.2797 | -6.2471 | -2.81 | 0.928 |
+| AMZN | event | 1s | L2 OLS on OFI | 100ms | 7849 | 0.1012 | 0.0561 | 0.1447 | 0.0598 | 0.0506 | -98535.40 | -12.5539 | -12.7622 | -12.3330 | -6.2769 | -2.82 | 0.857 |
+| AMZN | event | 1s | L3 ridge, full set | 1ms | 8251 | 0.2751 | 0.2258 | 0.3263 | 0.1945 | 0.1375 | -101609.60 | -12.3148 | -12.5295 | -12.0766 | -6.1574 | -2.77 | 1.000 |
+| AMZN | event | 1s | L3 ridge, full set | 10ms | 8198 | 0.2430 | 0.1909 | 0.2895 | 0.1472 | 0.1215 | -101407.80 | -12.3698 | -12.5919 | -12.1417 | -6.1849 | -2.78 | 1.000 |
+| AMZN | event | 1s | L3 ridge, full set | 100ms | 7849 | 0.2026 | 0.1579 | 0.2440 | 0.1347 | 0.1013 | -97739.40 | -12.4525 | -12.6551 | -12.2377 | -6.2262 | -2.80 | 1.000 |
+| AMZN | event | 1s | L4 GBM, full set | 1ms | 8251 | 0.3079 | 0.2597 | 0.3584 | 0.2279 | 0.1540 | -101338.60 | -12.2820 | -12.4975 | -12.0595 | -6.1410 | -2.76 | 1.000 |
+| AMZN | event | 1s | L4 GBM, full set | 10ms | 8198 | 0.2643 | 0.2174 | 0.3115 | 0.1884 | 0.1322 | -101232.80 | -12.3485 | -12.5604 | -12.1263 | -6.1742 | -2.77 | 1.000 |
+| AMZN | event | 1s | L4 GBM, full set | 100ms | 7849 | 0.2291 | 0.1853 | 0.2752 | 0.1891 | 0.1145 | -97531.40 | -12.4260 | -12.6337 | -12.2068 | -6.2130 | -2.79 | 1.000 |
+| AMZN | event | 1s | CTRL always long | 1ms | 8251 | -0.0323 | -0.0916 | 0.0159 | -0.0544 | -0.0161 | -104145.60 | -12.6222 | -12.8446 | -12.3933 | -6.3111 | -2.84 | 0.000 |
+| AMZN | event | 1s | CTRL always long | 10ms | 8198 | -0.0329 | -0.0833 | 0.0183 | -0.0545 | -0.0165 | -103669.80 | -12.6457 | -12.8711 | -12.4272 | -6.3229 | -2.84 | 0.000 |
+| AMZN | event | 1s | CTRL always long | 100ms | 7849 | -0.0294 | -0.0762 | 0.0180 | -0.0586 | -0.0147 | -99560.40 | -12.6845 | -12.8974 | -12.4624 | -6.3422 | -2.85 | 0.000 |
+| AMZN | event | 1s | CTRL always short | 1ms | 8251 | 0.0323 | -0.0159 | 0.0916 | -0.0053 | 0.0161 | -103612.60 | -12.5576 | -12.7773 | -12.3335 | -6.2788 | -2.82 | 0.015 |
+| AMZN | event | 1s | CTRL always short | 10ms | 8198 | 0.0329 | -0.0183 | 0.0833 | -0.0007 | 0.0165 | -103129.80 | -12.5799 | -12.8096 | -12.3679 | -6.2899 | -2.83 | 0.018 |
+| AMZN | event | 1s | CTRL always short | 100ms | 7849 | 0.0294 | -0.0180 | 0.0762 | -0.0007 | 0.0147 | -99098.40 | -12.6256 | -12.8249 | -12.4156 | -6.3128 | -2.84 | 0.016 |
+| AMZN | event | 1s | ORACLE perfect foresight (bound) | 1ms | 3720 | 2.2765 | 2.1934 | 2.3657 | 2.1304 | 1.1382 | -38190.00 | -10.2661 | -10.5522 | -9.9812 | -5.1331 | -2.31 | 1.000 |
+| AMZN | event | 1s | ORACLE perfect foresight (bound) | 10ms | 3700 | 2.0368 | 1.9486 | 2.1253 | 1.8646 | 1.0184 | -39107.00 | -10.5695 | -10.8353 | -10.2653 | -5.2847 | -2.37 | 1.000 |
+| AMZN | event | 1s | ORACLE perfect foresight (bound) | 100ms | 3533 | 1.6326 | 1.5407 | 1.7192 | 1.4321 | 0.8163 | -39153.80 | -11.0823 | -11.3829 | -10.8092 | -5.5412 | -2.49 | 1.000 |
+| AMZN | event | 5s | L0 zero | 1ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | event | 5s | L0 zero | 10ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | event | 5s | L0 zero | 100ms | 0 | n/a | n/a | n/a | n/a | n/a | 0.00 | n/a | n/a | n/a | n/a | n/a | n/a |
+| AMZN | event | 5s | L1 sign(queue imbalance) | 1ms | 2670 | 0.3022 | 0.1339 | 0.4662 | -0.0173 | 0.1511 | -33118.00 | -12.4037 | -12.9898 | -11.7877 | -6.2019 | -2.79 | 0.543 |
+| AMZN | event | 5s | L1 sign(queue imbalance) | 10ms | 2665 | 0.2559 | 0.0918 | 0.4297 | -0.0993 | 0.1280 | -33223.00 | -12.4664 | -13.0730 | -11.8535 | -6.2332 | -2.80 | 0.351 |
+| AMZN | event | 5s | L1 sign(queue imbalance) | 100ms | 2627 | 0.2592 | 0.1111 | 0.4180 | -0.0684 | 0.1296 | -32815.20 | -12.4915 | -13.1141 | -11.8652 | -6.2458 | -2.81 | 0.394 |
+| AMZN | event | 5s | L1m sign(microprice - mid) | 1ms | 2963 | 0.1917 | 0.0284 | 0.3399 | -0.3073 | 0.0958 | -36557.80 | -12.3381 | -12.9303 | -11.7995 | -6.1691 | -2.77 | 0.137 |
+| AMZN | event | 5s | L1m sign(microprice - mid) | 10ms | 2958 | 0.1655 | 0.0040 | 0.3241 | -0.3286 | 0.0827 | -36638.80 | -12.3863 | -12.9860 | -11.8211 | -6.1932 | -2.78 | 0.083 |
+| AMZN | event | 5s | L1m sign(microprice - mid) | 100ms | 2914 | 0.1290 | -0.0435 | 0.2854 | -0.3229 | 0.0645 | -36274.40 | -12.4483 | -13.0176 | -11.8298 | -6.2242 | -2.80 | 0.036 |
+| AMZN | event | 5s | L2 OLS on OFI | 1ms | 2963 | 0.3250 | 0.1728 | 0.4823 | 0.0674 | 0.1625 | -36162.80 | -12.2048 | -12.8007 | -11.6958 | -6.1024 | -2.74 | 0.709 |
+| AMZN | event | 5s | L2 OLS on OFI | 10ms | 2958 | 0.2980 | 0.1468 | 0.4412 | 0.0479 | 0.1490 | -36246.80 | -12.2538 | -12.8244 | -11.7593 | -6.1269 | -2.75 | 0.609 |
+| AMZN | event | 5s | L2 OLS on OFI | 100ms | 2914 | 0.3044 | 0.1736 | 0.4484 | -0.0251 | 0.1522 | -35763.40 | -12.2730 | -12.7582 | -11.7344 | -6.1365 | -2.76 | 0.667 |
+| AMZN | event | 5s | L3 ridge, full set | 1ms | 2963 | 0.5096 | 0.3443 | 0.6478 | 0.0103 | 0.2548 | -35615.80 | -12.0202 | -12.6346 | -11.4903 | -6.0101 | -2.70 | 0.999 |
+| AMZN | event | 5s | L3 ridge, full set | 10ms | 2958 | 0.4610 | 0.3015 | 0.6134 | -0.0174 | 0.2305 | -35764.80 | -12.0909 | -12.6895 | -11.5566 | -6.0454 | -2.72 | 0.995 |
+| AMZN | event | 5s | L3 ridge, full set | 100ms | 2914 | 0.3933 | 0.2227 | 0.5496 | -0.2069 | 0.1966 | -35504.40 | -12.1841 | -12.7438 | -11.6014 | -6.0920 | -2.74 | 0.961 |
+| AMZN | event | 5s | L4 GBM, full set | 1ms | 2963 | 0.5420 | 0.3663 | 0.7323 | 0.1588 | 0.2710 | -35519.80 | -11.9878 | -12.5427 | -11.4523 | -5.9939 | -2.69 | 1.000 |
+| AMZN | event | 5s | L4 GBM, full set | 10ms | 2958 | 0.5005 | 0.3244 | 0.6893 | 0.1406 | 0.2503 | -35647.80 | -12.0513 | -12.5917 | -11.5304 | -6.0257 | -2.71 | 0.998 |
+| AMZN | event | 5s | L4 GBM, full set | 100ms | 2914 | 0.4393 | 0.2637 | 0.6301 | 0.0395 | 0.2196 | -35370.40 | -12.1381 | -12.6481 | -11.5898 | -6.0690 | -2.73 | 0.990 |
+| AMZN | event | 5s | CTRL always long | 1ms | 2963 | -0.0989 | -0.2827 | 0.0801 | -0.1526 | -0.0494 | -37418.80 | -12.6287 | -13.1853 | -12.0785 | -6.3143 | -2.84 | 0.000 |
+| AMZN | event | 5s | CTRL always long | 10ms | 2958 | -0.0958 | -0.2721 | 0.0859 | -0.1923 | -0.0479 | -37411.80 | -12.6477 | -13.2279 | -12.0946 | -6.3238 | -2.84 | 0.000 |
+| AMZN | event | 5s | CTRL always long | 100ms | 2914 | -0.0854 | -0.2532 | 0.0925 | -0.1651 | -0.0427 | -36899.40 | -12.6628 | -13.2072 | -12.0705 | -6.3314 | -2.84 | 0.000 |
+| AMZN | event | 5s | CTRL always short | 1ms | 2963 | 0.0989 | -0.0801 | 0.2827 | -0.0301 | 0.0494 | -36832.80 | -12.4309 | -12.9829 | -11.9173 | -6.2155 | -2.79 | 0.013 |
+| AMZN | event | 5s | CTRL always short | 10ms | 2958 | 0.0958 | -0.0859 | 0.2721 | -0.0443 | 0.0479 | -36844.80 | -12.4560 | -12.9938 | -11.9393 | -6.2280 | -2.80 | 0.012 |
+| AMZN | event | 5s | CTRL always short | 100ms | 2914 | 0.0854 | -0.0925 | 0.2532 | -0.0592 | 0.0427 | -36401.40 | -12.4919 | -12.9978 | -11.9694 | -6.2460 | -2.81 | 0.009 |
+| AMZN | event | 5s | ORACLE perfect foresight (bound) | 1ms | 2192 | 3.5103 | 3.2928 | 3.7377 | 3.0531 | 1.7551 | -19728.20 | -9.0001 | -9.6362 | -8.3836 | -4.5000 | -2.02 | 1.000 |
+| AMZN | event | 5s | ORACLE perfect foresight (bound) | 10ms | 2187 | 3.3807 | 3.1517 | 3.6220 | 2.8766 | 1.6903 | -20018.20 | -9.1533 | -9.7962 | -8.5403 | -4.5766 | -2.06 | 1.000 |
+| AMZN | event | 5s | ORACLE perfect foresight (bound) | 100ms | 2147 | 3.1793 | 2.9907 | 3.3761 | 2.7950 | 1.5897 | -20223.20 | -9.4193 | -10.0127 | -8.8071 | -4.7096 | -2.12 | 1.000 |
+
+## Per-fold gross ticks/trade under protocol C
+
+No pooled number travels alone (CLAUDE.md rule 4). Reference latency only.
+
+| ticker | clock | h | rung | per-fold gross ticks/trade | worst |
+|---|---|---|---|---|---|
+| INTC | calendar | 1s | L1 sign(queue imbalance) | 0.0232, 0.0233, 0.0192, 0.0123, 0.0281 | 0.0123 |
+| INTC | calendar | 1s | L1m sign(microprice - mid) | 0.0209, 0.0120, 0.0103, 0.0069, 0.0173 | 0.0069 |
+| INTC | calendar | 1s | L2 OLS on OFI | 0.0054, 0.0111, 0.0055, -0.0001, 0.0133 | -0.0001 |
+| INTC | calendar | 1s | L3 ridge, full set | 0.0153, 0.0244, 0.0174, 0.0123, 0.0287 | 0.0123 |
+| INTC | calendar | 1s | L4 GBM, full set | 0.0080, 0.0206, 0.0126, 0.0120, 0.0267 | 0.0080 |
+| INTC | calendar | 1s | CTRL always long | -0.0039, -0.0049, -0.0049, 0.0019, -0.0019 | -0.0049 |
+| INTC | calendar | 1s | CTRL always short | 0.0039, 0.0049, 0.0049, -0.0019, 0.0019 | -0.0019 |
+| INTC | calendar | 1s | ORACLE perfect foresight (bound) | 0.9180, 0.9702, 0.9541, 0.9328, 0.9397 | 0.9180 |
+| INTC | calendar | 5s | L1 sign(queue imbalance) | 0.0726, 0.0715, 0.0662, 0.0442, 0.0986 | 0.0442 |
+| INTC | calendar | 5s | L1m sign(microprice - mid) | 0.0660, 0.0490, 0.0384, 0.0178, 0.0486 | 0.0178 |
+| INTC | calendar | 5s | L2 OLS on OFI | -0.0053, 0.0212, 0.0225, -0.0073, 0.0381 | -0.0073 |
+| INTC | calendar | 5s | L3 ridge, full set | 0.0646, 0.0821, 0.0609, 0.0455, 0.0933 | 0.0455 |
+| INTC | calendar | 5s | L4 GBM, full set | 0.0330, 0.0556, 0.0291, 0.0152, 0.0394 | 0.0152 |
+| INTC | calendar | 5s | CTRL always long | -0.0237, -0.0291, -0.0225, 0.0073, -0.0131 | -0.0291 |
+| INTC | calendar | 5s | CTRL always short | 0.0237, 0.0291, 0.0225, -0.0073, 0.0131 | -0.0073 |
+| INTC | calendar | 5s | ORACLE perfect foresight (bound) | 1.0000, 1.0645, 1.0610, 1.0556, 1.0676 | 1.0000 |
+| INTC | event | 1s | L1 sign(queue imbalance) | 0.0328, 0.0355, 0.0255, 0.0192, 0.0495 | 0.0192 |
+| INTC | event | 1s | L1m sign(microprice - mid) | 0.0274, 0.0202, 0.0201, 0.0164, 0.0255 | 0.0164 |
+| INTC | event | 1s | L2 OLS on OFI | 0.0065, 0.0140, 0.0067, -0.0016, 0.0124 | -0.0016 |
+| INTC | event | 1s | L3 ridge, full set | 0.0199, 0.0339, 0.0303, 0.0225, 0.0482 | 0.0199 |
+| INTC | event | 1s | L4 GBM, full set | 0.0294, 0.0447, 0.0223, 0.0175, 0.0356 | 0.0175 |
+| INTC | event | 1s | CTRL always long | -0.0070, -0.0130, -0.0078, 0.0022, -0.0057 | -0.0130 |
+| INTC | event | 1s | CTRL always short | 0.0070, 0.0130, 0.0078, -0.0022, 0.0057 | -0.0022 |
+| INTC | event | 1s | ORACLE perfect foresight (bound) | 0.8134, 0.9116, 0.8654, 0.8767, 0.9326 | 0.8134 |
+| INTC | event | 5s | L1 sign(queue imbalance) | 0.0789, 0.0632, 0.0729, 0.0517, 0.1142 | 0.0517 |
+| INTC | event | 5s | L1m sign(microprice - mid) | 0.0712, 0.0539, 0.0431, 0.0282, 0.0586 | 0.0282 |
+| INTC | event | 5s | L2 OLS on OFI | 0.0268, 0.0478, 0.0133, -0.0094, 0.0220 | -0.0094 |
+| INTC | event | 5s | L3 ridge, full set | 0.0666, 0.0786, 0.0870, 0.0517, 0.0908 | 0.0517 |
+| INTC | event | 5s | L4 GBM, full set | 0.0697, 0.0986, 0.0321, 0.0125, 0.0439 | 0.0125 |
+| INTC | event | 5s | CTRL always long | -0.0268, -0.0416, -0.0227, 0.0047, -0.0176 | -0.0416 |
+| INTC | event | 5s | CTRL always short | 0.0268, 0.0416, 0.0227, -0.0047, 0.0176 | -0.0047 |
+| INTC | event | 5s | ORACLE perfect foresight (bound) | 1.0045, 1.0233, 1.0476, 1.0323, 1.0552 | 1.0045 |
+| AMZN | calendar | 1s | L1 sign(queue imbalance) | 0.0605, 0.0926, 0.0913, 0.0656, 0.2532 | 0.0605 |
+| AMZN | calendar | 1s | L1m sign(microprice - mid) | 0.0123, 0.0715, 0.0954, 0.0697, 0.2041 | 0.0123 |
+| AMZN | calendar | 1s | L2 OLS on OFI | 0.1166, 0.1043, 0.0468, 0.0310, 0.1307 | 0.0310 |
+| AMZN | calendar | 1s | L3 ridge, full set | 0.0626, 0.0940, 0.1433, 0.0893, 0.2325 | 0.0626 |
+| AMZN | calendar | 1s | L4 GBM, full set | 0.0352, 0.1189, 0.1371, 0.1290, 0.1806 | 0.0352 |
+| AMZN | calendar | 1s | CTRL always long | -0.0191, -0.0099, -0.0241, -0.0077, -0.0347 | -0.0347 |
+| AMZN | calendar | 1s | CTRL always short | 0.0191, 0.0099, 0.0241, 0.0077, 0.0347 | 0.0077 |
+| AMZN | calendar | 1s | ORACLE perfect foresight (bound) | 2.3565, 2.2098, 2.0957, 2.1272, 2.0788 | 2.0788 |
+| AMZN | calendar | 5s | L1 sign(queue imbalance) | 0.0052, -0.1728, 0.3328, 0.1755, 0.7711 | -0.1728 |
+| AMZN | calendar | 5s | L1m sign(microprice - mid) | 0.0007, -0.1667, 0.3241, -0.0290, 0.5795 | -0.1667 |
+| AMZN | calendar | 5s | L2 OLS on OFI | 0.4154, 0.2459, 0.1565, 0.1614, 0.3857 | 0.1565 |
+| AMZN | calendar | 5s | L3 ridge, full set | 0.0436, 0.1434, 0.3366, 0.2303, 0.6758 | 0.0436 |
+| AMZN | calendar | 5s | L4 GBM, full set | -0.0034, 0.1066, 0.1953, 0.4097, 0.5207 | -0.0034 |
+| AMZN | calendar | 5s | CTRL always long | -0.1255, -0.1667, -0.0997, -0.0069, -0.1384 | -0.1667 |
+| AMZN | calendar | 5s | CTRL always short | 0.1255, 0.1667, 0.0997, 0.0069, 0.1384 | 0.0069 |
+| AMZN | calendar | 5s | ORACLE perfect foresight (bound) | 3.6165, 3.3353, 3.0407, 3.1396, 3.5529 | 3.0407 |
+| AMZN | event | 1s | L1 sign(queue imbalance) | 0.1885, 0.2587, 0.2428, 0.1024, 0.3037 | 0.1024 |
+| AMZN | event | 1s | L1m sign(microprice - mid) | 0.1003, 0.2142, 0.2388, 0.1001, 0.2372 | 0.1001 |
+| AMZN | event | 1s | L2 OLS on OFI | 0.1337, 0.0506, 0.1289, 0.1344, 0.2045 | 0.0506 |
+| AMZN | event | 1s | L3 ridge, full set | 0.2016, 0.1945, 0.2850, 0.2905, 0.3869 | 0.1945 |
+| AMZN | event | 1s | L4 GBM, full set | 0.2279, 0.3167, 0.3144, 0.3663, 0.3256 | 0.2279 |
+| AMZN | event | 1s | CTRL always long | -0.0373, -0.0276, -0.0406, 0.0053, -0.0544 | -0.0544 |
+| AMZN | event | 1s | CTRL always short | 0.0373, 0.0276, 0.0406, -0.0053, 0.0544 | -0.0053 |
+| AMZN | event | 1s | ORACLE perfect foresight (bound) | 2.4572, 2.2451, 2.1304, 2.2535, 2.2630 | 2.1304 |
+| AMZN | event | 5s | L1 sign(queue imbalance) | -0.0173, 0.4073, 0.3888, 0.1101, 0.6277 | -0.0173 |
+| AMZN | event | 5s | L1m sign(microprice - mid) | -0.3073, 0.3883, 0.3782, -0.0089, 0.5250 | -0.3073 |
+| AMZN | event | 5s | L2 OLS on OFI | 0.2520, 0.2190, 0.3637, 0.0674, 0.6862 | 0.0674 |
+| AMZN | event | 5s | L3 ridge, full set | 0.0103, 0.4215, 0.6778, 0.4947, 0.9507 | 0.0103 |
+| AMZN | event | 5s | L4 GBM, full set | 0.1588, 0.6518, 0.5081, 0.5035, 0.8865 | 0.1588 |
+| AMZN | event | 5s | CTRL always long | -0.0814, -0.1492, -0.1363, 0.0301, -0.1526 | -0.1526 |
+| AMZN | event | 5s | CTRL always short | 0.0814, 0.1492, 0.1363, -0.0301, 0.1526 | -0.0301 |
+| AMZN | event | 5s | ORACLE perfect foresight (bound) | 3.7634, 3.5316, 3.0531, 3.3170, 3.7447 | 3.0531 |
+
+## Diebold-Mariano between adjacent rungs (gross PnL per trade)
+
+Loss is `-gross ticks`, so a NEGATIVE statistic means the upper rung earns more. Paired on the trades both rungs took; HAC lag = the bootstrap block length. Adjacent rungs are largely NESTED (L3's feature set contains L2's) and standard DM is undersized there, so read these as indicative, not decisive — `EVAL_PROTOCOL.md` sec. 2 asks for the Giacomini-White variant, which is not implemented.
+
+| ticker | clock | h | upper | lower | n | mean diff (ticks) | DM stat | p |
+|---|---|---|---|---|---|---|---|---|
+| INTC | calendar | 1s | L1m sign(microprice - mid) | L1 sign(queue imbalance) | 17043 | -0.0077 | 4.799 | 0.0000 |
+| INTC | calendar | 1s | L2 OLS on OFI | L1m sign(microprice - mid) | 17044 | -0.0065 | 4.699 | 0.0000 |
+| INTC | calendar | 1s | L3 ridge, full set | L2 OLS on OFI | 17044 | 0.0126 | -7.086 | 0.0000 |
+| INTC | calendar | 1s | L4 GBM, full set | L3 ridge, full set | 17044 | -0.0036 | 2.410 | 0.0160 |
+| INTC | calendar | 5s | L1m sign(microprice - mid) | L1 sign(queue imbalance) | 3787 | -0.0267 | 3.519 | 0.0004 |
+| INTC | calendar | 5s | L2 OLS on OFI | L1m sign(microprice - mid) | 3787 | -0.0301 | 3.662 | 0.0003 |
+| INTC | calendar | 5s | L3 ridge, full set | L2 OLS on OFI | 3787 | 0.0555 | -6.448 | 0.0000 |
+| INTC | calendar | 5s | L4 GBM, full set | L3 ridge, full set | 3787 | -0.0349 | 4.857 | 0.0000 |
+| INTC | event | 1s | L1m sign(microprice - mid) | L1 sign(queue imbalance) | 10035 | -0.0113 | 3.926 | 0.0001 |
+| INTC | event | 1s | L2 OLS on OFI | L1m sign(microprice - mid) | 10035 | -0.0143 | 7.001 | 0.0000 |
+| INTC | event | 1s | L3 ridge, full set | L2 OLS on OFI | 10035 | 0.0238 | -7.605 | 0.0000 |
+| INTC | event | 1s | L4 GBM, full set | L3 ridge, full set | 10035 | -0.0014 | 0.532 | 0.5944 |
+| INTC | event | 5s | L1m sign(microprice - mid) | L1 sign(queue imbalance) | 3261 | -0.0255 | 2.688 | 0.0072 |
+| INTC | event | 5s | L2 OLS on OFI | L1m sign(microprice - mid) | 3261 | -0.0310 | 4.647 | 0.0000 |
+| INTC | event | 5s | L3 ridge, full set | L2 OLS on OFI | 3261 | 0.0549 | -5.583 | 0.0000 |
+| INTC | event | 5s | L4 GBM, full set | L3 ridge, full set | 3261 | -0.0236 | 2.819 | 0.0048 |
+| AMZN | calendar | 1s | L1m sign(microprice - mid) | L1 sign(queue imbalance) | 13985 | -0.0154 | 1.896 | 0.0580 |
+| AMZN | calendar | 1s | L2 OLS on OFI | L1m sign(microprice - mid) | 15456 | -0.0042 | 0.205 | 0.8379 |
+| AMZN | calendar | 1s | L3 ridge, full set | L2 OLS on OFI | 15456 | 0.0380 | -2.396 | 0.0166 |
+| AMZN | calendar | 1s | L4 GBM, full set | L3 ridge, full set | 15456 | -0.0054 | 0.333 | 0.7392 |
+| AMZN | calendar | 5s | L1m sign(microprice - mid) | L1 sign(queue imbalance) | 3307 | -0.0659 | 1.640 | 0.1009 |
+| AMZN | calendar | 5s | L2 OLS on OFI | L1m sign(microprice - mid) | 3672 | 0.1315 | -1.294 | 0.1957 |
+| AMZN | calendar | 5s | L3 ridge, full set | L2 OLS on OFI | 3672 | 0.0123 | -0.148 | 0.8827 |
+| AMZN | calendar | 5s | L4 GBM, full set | L3 ridge, full set | 3672 | -0.0408 | 0.527 | 0.5979 |
+| AMZN | event | 1s | L1m sign(microprice - mid) | L1 sign(queue imbalance) | 7477 | -0.0300 | 2.090 | 0.0366 |
+| AMZN | event | 1s | L2 OLS on OFI | L1m sign(microprice - mid) | 8251 | -0.0433 | 1.342 | 0.1796 |
+| AMZN | event | 1s | L3 ridge, full set | L2 OLS on OFI | 8251 | 0.1406 | -4.657 | 0.0000 |
+| AMZN | event | 1s | L4 GBM, full set | L3 ridge, full set | 8251 | 0.0328 | -1.175 | 0.2398 |
+| AMZN | event | 5s | L1m sign(microprice - mid) | L1 sign(queue imbalance) | 2670 | -0.1011 | 2.252 | 0.0243 |
+| AMZN | event | 5s | L2 OLS on OFI | L1m sign(microprice - mid) | 2963 | 0.1333 | -1.239 | 0.2152 |
+| AMZN | event | 5s | L3 ridge, full set | L2 OLS on OFI | 2963 | 0.1846 | -1.755 | 0.0792 |
+| AMZN | event | 5s | L4 GBM, full set | L3 ridge, full set | 2963 | 0.0324 | -0.401 | 0.6882 |
 
 ## Reading notes
 
-- A break-even cost BELOW the assumed take fee of $0.0030/share (0.30 ticks) means the rung does not pay for its own fees, before any spread cost.
-- The PnL confidence interval is a circular block bootstrap with block length >= the label horizon; resampling individual trades would ignore the serial dependence that makes the naive interval far too narrow.
-- Trade counts differ across rungs because the deadband bites differently: a rung whose predictions rarely exceed half a tick simply does not trade, which is a result rather than a missing row.
+- **The confidence intervals are on the MEAN per trade**, which is what a block bootstrap of a mean returns. An earlier draft printed them beside the TOTAL PnL, where they were off by a factor of `n_trades` in every row.
+- Both intervals are circular block bootstraps with block length >= the label horizon; resampling individual trades would ignore the serial dependence that makes the naive interval far too narrow.
+- **The DSR is on the GROSS series.** On the net series every rung has a Sharpe near -7.6 (it loses the spread almost deterministically), and the DSR is 0.000 at every trial count from 1 to 1e12 — a tautology rather than a finding. Deflation only means something where there is something to deflate.
+- **Trade counts differ across rungs only where a prediction is exactly zero**, not because of a deadband (there isn't one). The decision set comes from the stamp vector, so every rung trades at identical times; `qi_touch == 0` on 10.5% of AMZN calendar stamps (bid size exactly equal to ask size) is the whole of the gap.
+- **Net PnL is not comparable across latency rows on the event clock**, where the decision set itself shifts with latency. The per-trade columns are the comparable ones.

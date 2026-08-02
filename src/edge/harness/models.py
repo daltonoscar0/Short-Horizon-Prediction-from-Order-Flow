@@ -94,9 +94,34 @@ class Rung:
     def _fit_raw(self, X, y):
         pass
 
-    def fit(self, X, y):
-        self._fit_raw(X, y)
-        self.scale_ = _fit_scale(self._raw(X), y)
+    def fit(self, X, y, scale_holdout=None):
+        """Fit the raw score, then the through-origin rescale.
+
+        `scale_holdout` is a boolean mask over the TRAINING rows. Where given, the raw model
+        is fitted on `~scale_holdout` and the scale on `scale_holdout` — a strictly causal
+        calibration. Where None, both are fitted on the same rows, which is the in-sample
+        variant and is retained only as a diagnostic.
+
+        WHY THIS EXISTS (2026-08-02 red team). The in-sample scale solves
+        `sum(s*y)/sum(s*s)` against predictions that a high-capacity model has already fitted
+        almost perfectly, so it returns essentially no shrinkage. Out of sample the amplitude
+        is then far too large and R^2-vs-zero explodes negative — which is exactly the large
+        negative protocol-C R^2 the earlier ladder reported as a finding. It was a calibration
+        artifact: with a held-out scale, INTC calendar 10s L4 goes from C = -0.5523 to
+        C = +0.0151 and its A-C gap from 1.0707 to 0.4920. Under protocol A the artifact never
+        bites, because A's "out-of-sample" rows are the temporal neighbours of its training
+        rows -- so the in-sample scale inflates the measured optimism rather than the model.
+        """
+        if scale_holdout is None:
+            self._fit_raw(X, y)
+            self.scale_ = _fit_scale(self._raw(X), y)
+            return self
+
+        hold = np.asarray(scale_holdout, dtype=bool)
+        if hold.all() or not hold.any():
+            raise ValueError("scale_holdout must leave rows on both sides of the split")
+        self._fit_raw(X[~hold], y[~hold])
+        self.scale_ = _fit_scale(self._raw(X[hold]), y[hold])
         return self
 
     def predict(self, X):
@@ -112,7 +137,7 @@ class L0Zero(Rung):
     def _raw(self, X):
         return np.zeros(X.shape[0], dtype=np.float64)
 
-    def fit(self, X, y):
+    def fit(self, X, y, scale_holdout=None):
         self.scale_ = 0.0  # nothing to scale; keep the prediction identically zero
         return self
 

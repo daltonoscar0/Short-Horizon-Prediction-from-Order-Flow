@@ -11,9 +11,24 @@ The three protocols, and what the difference between them measures:
   C  purged walk-forward with embargo  -- correct
 
   A -> C is TOTAL optimism.
-  B -> C isolates the LABEL-OVERLAP component (B is already strictly forward in time, so
-        whatever it gains over C comes from labels straddling the fold boundary).
-  A -> B is then the residual: training on the future outright.
+  B -> C is the purge/embargo effect AT A WALK-FORWARD BOUNDARY.
+  A -> B is the residual.
+
+CORRECTED 2026-08-02, and the correction matters. This module used to describe B -> C as
+"the label-overlap component" and A -> B as "training on the future outright". Both labels
+were wrong, and the phase-2 red team proved it with protocol D (below):
+
+  - Training on the future OUTRIGHT, in blocks disjoint from the test set, is worth ~0.01-0.05
+    in IC (that is D -> C).
+  - Rows temporally ADJACENT to the test rows -- i.e. label overlap -- are worth 0.11-0.36
+    (that is A -> D), and they sit INSIDE the A -> B column.
+  - B -> C is near zero for an arithmetic reason, not a substantive one: under expanding
+    walk-forward, purge+embargo can only ever remove the last h+E of a multi-hour training
+    set, which is 0.6-1.1% of the training rows. A column that can touch 1% of the training
+    set is not a measurement of label overlap in general.
+
+So a near-zero B -> C does NOT license "label overlap contributes nothing". The opposite is
+true; it is just not measurable in that column under this fold geometry.
 
 Frozen constants live here so no module re-declares one and no protocol is silently run at a
 different fold count than the protocol it is being compared against.
@@ -41,4 +56,10 @@ def default_embargo_ns(horizon_ns):
 # default_embargo_ns(h); the rest exist to show the result is not an artifact of that pick.
 EMBARGO_SWEEP_NS = (0, 1 * NS_PER_SEC, 10 * NS_PER_SEC, 60 * NS_PER_SEC, 300 * NS_PER_SEC)
 
-PROTOCOLS = ("A", "B", "C")
+PROTOCOLS = ("A", "B", "C", "D")
+
+# D is a CONTROL, not one of the three protocols under study. It shares C's test blocks but
+# trains on everything outside them, past and future, unpurged -- so it isolates "the model
+# saw the future" from "the model saw rows adjacent to the test rows". Added 2026-08-02;
+# see reports/adversary/phase2-ladder-2026-08-02.md.
+HEADLINE_PROTOCOLS = ("A", "B", "C")

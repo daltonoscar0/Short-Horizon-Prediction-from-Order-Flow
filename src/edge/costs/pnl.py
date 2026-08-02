@@ -133,7 +133,15 @@ def passive_round_trip_pnl(
 
 
 def break_even_cost_per_share(pnl_before_extra_cost, n_trades, shares=TRADE_SIZE_SHARES):
-    """The per-share cost at which total PnL crosses zero. THE HEADLINE NUMBER.
+    """The per-share cost at which total PnL crosses zero, INCREMENTAL to costs already paid.
+
+    NOT the headline number, and the 2026-08-02 red team is the reason this docstring says so.
+    Fed the NET series (spread crossed, take fees paid) this returns the cost on top of those,
+    which for an always-on strategy is dominated by the spread and is therefore very nearly
+    model-invariant: a constant always-long predictor scores -0.8072 ticks on INTC calendar 1s
+    against a whole-ladder range of [-0.8025, -0.7702], i.e. inside it. A column that a
+    constant cannot be distinguished from is measuring the trading rule, not the signal. Use
+    `break_even_total_ticks` on the GROSS series for the question the project actually asks.
 
     Each round trip pays the extra cost twice (in and out), so total extra cost is
     `2 * c * shares * n_trades` and the break-even c solves
@@ -163,6 +171,29 @@ def break_even_cost_bps(pnl_before_extra_cost, n_trades, avg_price_raw,
     if not np.isfinite(px) or px <= 0:
         return np.nan
     return 1e4 * dollars / px
+
+
+def break_even_total_ticks(gross_pnl, n_trades, shares=TRADE_SIZE_SHARES):
+    """TOTAL per-share, per-side cost the signal can bear before it stops paying. THE HEADLINE.
+
+    Fed the GROSS (mid-to-mid, no spread, no fees) series, so the returned number is inclusive
+    of every cost rather than incremental to an assumed one:
+
+        sum(gross) - 2 * c * shares * n_trades = 0
+
+    A reader who disagrees with the assumed $0.0030 take fee reads their own answer off this
+    column directly -- which is what the break-even table was always supposed to allow, and
+    what the incremental version could not, since the fee was already inside its input.
+
+    Compare against the ACTUAL cost of trading: half-spread per side plus the take fee. On
+    INTC (1.234-tick mean spread) that is ~0.62 + 0.30 = 0.92 ticks per side; this column
+    reports 0.0106 for L1, so the signal pays about 1% of what it costs to trade it.
+    """
+    total = float(np.nansum(gross_pnl))
+    if n_trades <= 0:
+        return np.nan
+    dollars = total / (2.0 * shares * n_trades)
+    return dollars / (TICK_SIZE_RAW / PRICE_SCALE)
 
 
 def turnover_and_holding(direction, horizon_ns):

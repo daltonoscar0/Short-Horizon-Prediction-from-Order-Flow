@@ -24,15 +24,17 @@ import pyarrow.parquet as pq
 from edge.costs import LATENCIES_NS, TRADE_SIZE_SHARES
 from edge.costs.pnl import (
     PRICE_SCALE,
+    TICK_SIZE_RAW,
     apply_latency,
     break_even_cost_bps,
     break_even_cost_ticks,
+    break_even_total_ticks,
     round_trip_pnl,
     turnover_and_holding,
 )
 from edge.costs.stats import block_bootstrap_ci, deflated_sharpe, diebold_mariano
 from edge.harness import N_FOLDS
-from edge.harness.models import build_ladder
+from edge.harness.models import Rung, build_ladder
 from edge.harness.run import HORIZON_NS, common_usable_mask
 from edge.harness.splits import make_folds
 
@@ -57,7 +59,7 @@ def _load_touch(frames_dir, ticker):
     return {n: t.column(n).to_numpy(zero_copy_only=False) for n in FRAME_COLS}
 
 
-def _non_overlapping(stamp_ts, horizon_ns, delta_ns):
+def _non_overlapping(stamp_ts, horizon_ns, delta_ns, next_free=None):
     """Positions at least `delta + horizon` apart, so at most one is ever open.
 
     EVAL_PROTOCOL.md sec. 3 mandates "single unit, no inventory accumulation, flat at
@@ -66,15 +68,77 @@ def _non_overlapping(stamp_ts, horizon_ns, delta_ns):
     would be a leveraged overlapping sum rather than the boring single-unit strategy the
     protocol asks for. Greedily keeping the earliest eligible stamp is the deterministic
     choice; it also makes the trade count an honest measure of turnover.
+
+    `next_free` CARRIES ACROSS FOLDS. Resetting it per fold let a position opened at the end
+    of one test block overlap one opened at the start of the next: the 2026-08-02 red team
+    measured 4 such gaps on INTC calendar 1s (800/900/900/1000 ms against a required 1001 ms),
+    one per fold boundary. Immaterial to the number, fatal to the docstring's invariant.
+    Returns the mask and the updated watermark so the caller can thread it through folds.
     """
     keep = np.zeros(stamp_ts.shape[0], dtype=bool)
     span = int(delta_ns) + int(horizon_ns)
-    next_free = np.iinfo(np.int64).min
+    if next_free is None:
+        next_free = np.iinfo(np.int64).min
     for i, t in enumerate(stamp_ts):
         if t >= next_free:
             keep[i] = True
             next_free = t + span
-    return keep
+    return keep, next_free
+
+
+class _ConstantDirection(Rung):
+    """Control: trade the same side every time, ignoring every feature.
+
+    The 2026-08-02 red team's central finding is that the incremental break-even column cannot
+    distinguish the ladder from this. It ships as a ROW so the reader sees that directly
+    instead of having to recompute it.
+    """
+
+    features = ()
+
+    def __init__(self, sign, name):
+        super().__init__()
+        self.sign = float(sign)
+        self.name = name
+
+    def _raw(self, X):
+        return np.full(X.shape[0], self.sign, dtype=np.float64)
+
+    def fit(self, X, y):
+        self.scale_ = 1.0  # a fitted rescale could flip the sign; a control must not move
+        return self
+
+
+class _Oracle(Rung):
+    """UPPER BOUND, not a rung: the realised label itself, i.e. perfect foresight.
+
+    Uses the future by construction. It is here to bound what any predictor could earn under
+    this fill model -- the red team measured that perfect foresight of the 1s mid sign still
+    loses money once the spread is crossed, which is the single most informative number about
+    whether this ladder could ever have paid.
+    """
+
+    name = "ORACLE perfect foresight (bound)"
+
+    def __init__(self, label_col):
+        super().__init__()
+        self.features = (label_col,)
+
+    def _raw(self, X):
+        return np.sign(X[:, 0])
+
+    def fit(self, X, y):
+        self.scale_ = 1.0
+        return self
+
+
+def build_controls(label_col):
+    """The three control predictors, in report order. Not part of the L0-L4 ladder."""
+    return [
+        _ConstantDirection(+1.0, "CTRL always long"),
+        _ConstantDirection(-1.0, "CTRL always short"),
+        _Oracle(label_col),
+    ]
 
 
 def simulate(cols, touch, y, ts, horizon_ns, delta_ns, rung, folds, common_mask,
@@ -102,8 +166,10 @@ def simulate(cols, touch, y, ts, horizon_ns, delta_ns, rung, folds, common_mask,
     pnl_all = np.full(y.shape[0], np.nan, dtype=np.float64)
     dir_all = np.zeros(y.shape[0], dtype=np.float64)
     gross_all = np.full(y.shape[0], np.nan, dtype=np.float64)
+    fold_id = np.full(y.shape[0], -1, dtype=np.int64)
+    next_free = None  # carried across folds: a position may not straddle a block boundary
 
-    for fold in folds:
+    for f_i, fold in enumerate(folds):
         tr = fold.train_idx[common_mask[fold.train_idx]]
         te = fold.test_idx[common_mask[fold.test_idx]]
         if tr.size < 50 or te.size < 20:
@@ -119,7 +185,7 @@ def simulate(cols, touch, y, ts, horizon_ns, delta_ns, rung, folds, common_mask,
         # decision points spaced at least delta + h apart, so at most one position is ever
         # open. Without this, a 1s horizon on the 100ms grid runs ten overlapping positions
         # and the PnL is a leveraged sum, not the boring strategy the protocol specifies.
-        spaced = _non_overlapping(ts[te], horizon_ns, delta_ns)
+        spaced, next_free = _non_overlapping(ts[te], horizon_ns, delta_ns, next_free)
         direction = np.where(spaced, direction, 0.0)
 
         er, xr = entry_rows[te], exit_rows[te]
@@ -133,6 +199,7 @@ def simulate(cols, touch, y, ts, horizon_ns, delta_ns, rung, folds, common_mask,
         )
         pnl_all[idx] = pnl
         dir_all[idx] = direction[valid]
+        fold_id[idx] = f_i
 
         # Mid-to-mid PnL: no spread crossing, no fees. This isolates the SIGNAL's economic
         # value from the cost of acting on it. Without it the net table is uninformative
@@ -144,7 +211,37 @@ def simulate(cols, touch, y, ts, horizon_ns, delta_ns, rung, folds, common_mask,
             direction[valid] * (mid_exit - mid_entry) / PRICE_SCALE * TRADE_SIZE_SHARES
         )
 
-    return pnl_all, dir_all, gross_all
+    return pnl_all, dir_all, gross_all, fold_id
+
+
+def _dm_adjacent(ticker, clock, h, gross_by_rung, ladder_names, block_len):
+    """Diebold-Mariano between ADJACENT ladder rungs on per-trade gross PnL.
+
+    EVAL_PROTOCOL.md sec. 2 asks for this and it was never wired up: `diebold_mariano` was
+    imported into this module and never called. The loss is `-gross ticks` per trade, so a
+    NEGATIVE statistic means the upper rung has the lower loss, i.e. earns more.
+
+    Rungs trade at identical stamps (the decision set comes from `_non_overlapping` on the
+    stamp vector alone, not from the prediction), so the two series are paired on the same
+    trades wherever both traded -- which is what DM requires and what makes the test legible.
+    """
+    out = []
+    for lower, upper in zip(ladder_names, ladder_names[1:]):
+        if lower not in gross_by_rung or upper not in gross_by_rung:
+            continue
+        g_lo, idx_lo = gross_by_rung[lower]
+        g_hi, idx_hi = gross_by_rung[upper]
+        common, i_lo, i_hi = np.intersect1d(idx_lo, idx_hi, return_indices=True)
+        if common.size < 8:
+            continue
+        # loss = -PnL, so "lower loss" reads as "more money".
+        dm = diebold_mariano(-g_hi[i_hi], -g_lo[i_lo], lag=block_len, loss="linear")
+        out.append({
+            "ticker": ticker, "clock": clock, "h": h, "upper": upper, "lower": lower,
+            "n": dm["n"], "mean_diff_ticks": -dm.get("mean_loss_diff", np.nan),
+            "dm_stat": dm["dm_stat"], "p_value": dm["p_value"],
+        })
+    return out
 
 
 def main(argv=None):
@@ -166,6 +263,7 @@ def main(argv=None):
 
     needed = sorted({f for r in build_ladder(seed=args.seed) for f in r.features})
     rows = []
+    dm_rows = []
     for ticker in tickers:
         touch = _load_touch(args.frames, ticker)
         for clock in clocks:
@@ -173,13 +271,20 @@ def main(argv=None):
             cols = _load_features(args.features, ticker, clock, ["ts_ns"] + needed + labels)
             ts = cols["ts_ns"].astype(np.int64)
             for h in horizons:
-                y = cols[f"label_y_mid_{h}"]
+                label_col = f"label_y_mid_{h}"
+                y = cols[label_col]
                 mask = common_usable_mask(cols, y, seed=args.seed)
                 folds = make_folds(ts, horizon_ns=HORIZON_NS[h], protocol="C",
                                    n_folds=N_FOLDS, seed=args.seed)
-                for rung in build_ladder(seed=args.seed):
+                # Controls run on the SAME rows, folds, mask and fills as the ladder, so a
+                # difference between a rung and a control cannot be a universe difference.
+                predictors = list(build_ladder(seed=args.seed)) + build_controls(label_col)
+                # Gross per-trade series, keyed by rung, for the DM tests between adjacent
+                # rungs at the reference latency.
+                gross_by_rung = {}
+                for rung in predictors:
                     for delta in LATENCIES_NS:
-                        pnl, direction, gross = simulate(
+                        pnl, direction, gross, fold_id = simulate(
                             cols, touch, y, ts, HORIZON_NS[h], delta, rung, folds, mask
                         )
                         traded = np.isfinite(pnl) & (direction != 0)
@@ -195,15 +300,39 @@ def main(argv=None):
                             continue
                         vals = pnl[traded]
                         gross_vals = gross[traded]
+                        gross_ticks = gross_vals / TRADE_SIZE_SHARES / (
+                            TICK_SIZE_RAW / PRICE_SCALE
+                        )
                         tk = turnover_and_holding(direction, HORIZON_NS[h])
-                        ci = block_bootstrap_ci(
-                            vals, block_len=max(10, int(HORIZON_NS[h] // 100_000_000)),
-                            n_boot=500, seed=args.seed,
-                        )
-                        d = deflated_sharpe(vals, n_trials=args.trials)
-                        avg_px = np.nanmean(
-                            touch["ask_px_1"].astype(np.float64)
-                        )
+                        block = max(10, int(HORIZON_NS[h] // 100_000_000))
+                        # CI on the MEAN per trade -- which is what block_bootstrap_ci
+                        # returns. The previous table printed this beside the TOTAL, off by
+                        # a factor of n_trades in 120/120 rows (2026-08-02 red team).
+                        ci = block_bootstrap_ci(vals, block_len=block, n_boot=500,
+                                                seed=args.seed)
+                        # The gross series is the one that discriminates between rungs, so
+                        # it is the one that needs an interval.
+                        ci_g = block_bootstrap_ci(gross_ticks, block_len=block, n_boot=500,
+                                                  seed=args.seed)
+                        # DSR on GROSS: net is a near-deterministic loss (Sharpe ~ -7.6), so
+                        # its DSR is 0.000 at every trial count from 1 to 1e12 -- a tautology,
+                        # not a finding. Deflation only bites where there is something to
+                        # deflate.
+                        d = deflated_sharpe(gross_vals, n_trials=args.trials)
+                        d_net = deflated_sharpe(vals, n_trials=args.trials)
+                        # bps denominator over TRADED rows only, not the whole session:
+                        # segment 0 is never tested and does not belong in the average price.
+                        entry_rows = apply_latency(
+                            touch["ts_ns"].astype(np.int64), delta, target_ts_ns=ts
+                        )[traded]
+                        avg_px = float(np.nanmean(
+                            touch["ask_px_1"].astype(np.float64)[entry_rows[entry_rows >= 0]]
+                        ))
+                        fids = fold_id[traded]
+                        per_fold = [
+                            float(np.nanmean(gross_ticks[fids == k]))
+                            for k in range(len(folds)) if np.any(fids == k)
+                        ]
                         rows.append({
                             "ticker": ticker, "clock": clock, "h": h, "rung": rung.name,
                             "delta_ms": delta / 1e6, "n_trades": n_trades,
@@ -211,20 +340,32 @@ def main(argv=None):
                             "mean_pnl": float(np.nanmean(vals)),
                             "be_ticks": break_even_cost_ticks(vals, n_trades),
                             "be_bps": break_even_cost_bps(vals, n_trades, avg_px),
+                            "be_total_ticks": break_even_total_ticks(gross_vals, n_trades),
                             "trade_rate": tk["trade_rate"],
                             "gross_total": float(np.nansum(gross_vals)),
                             "gross_per_trade": float(np.nanmean(gross_vals)),
-                            "gross_ticks_per_trade": float(
-                                np.nanmean(gross_vals) / TRADE_SIZE_SHARES / 0.01
-                            ),
+                            "gross_ticks_per_trade": float(np.nanmean(gross_ticks)),
+                            "gross_ci_lo": ci_g["lo"], "gross_ci_hi": ci_g["hi"],
+                            "per_fold_gross": per_fold,
+                            "worst_fold_gross": min(per_fold) if per_fold else np.nan,
                             "dsr": d["dsr"], "sharpe": d["sharpe"],
+                            "dsr_net": d_net["dsr"], "sharpe_net": d_net["sharpe"],
                             "ci_lo": ci["lo"], "ci_hi": ci["hi"],
                         })
+                        if delta == LATENCIES_NS[0]:
+                            gross_by_rung[rung.name] = (gross_ticks, np.flatnonzero(traded))
                         print(f"  {ticker}/{clock} h={h} {rung.name} d={delta/1e6:.0f}ms "
-                              f"trades={n_trades} be={rows[-1]['be_ticks']:.4f} ticks")
+                              f"trades={n_trades} "
+                              f"be_total={rows[-1]['be_total_ticks']:.4f} ticks")
+
+                dm_rows.extend(
+                    _dm_adjacent(ticker, clock, h, gross_by_rung,
+                                 [r.name for r in build_ladder(seed=args.seed)],
+                                 block_len=max(10, int(HORIZON_NS[h] // 100_000_000)))
+                )
 
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-    _write(args, rows)
+    _write(args, rows, dm_rows)
     print(f"wrote {args.out}")
     return 0
 
@@ -233,11 +374,15 @@ def _f(x, p=4):
     return "n/a" if x is None or not np.isfinite(x) else f"{x:.{p}f}"
 
 
-def _write(args, rows):
+def _write(args, rows, dm_rows):
     with open(args.out, "w") as fh:
         w = fh.write
         w("# Transaction costs, PnL and break-even cost (Phase 3)\n\n")
-        w(f"`python3 -m edge.costs.run --seed {args.seed} --trials {args.trials}`\n\n")
+        # Echo the FULL effective argument set. The previous header printed only --seed and
+        # --trials, and `--clocks` defaults to calendar, so the advertised command rebuilt
+        # half the table (CLAUDE.md rule 7, 2026-08-02 red team).
+        w(f"`python3 -m edge.costs.run --seed {args.seed} --trials {args.trials} "
+          f"--tickers {args.tickers} --clocks {args.clocks} --horizons {args.horizons}`\n\n")
         w("**Protocol C only.** A PnL number computed under a leaky protocol is not a weaker ")
         w("result, it is a misleading one; Phase 2 established which protocol to believe.\n\n")
         w("## Stated assumptions\n\n")
@@ -250,7 +395,12 @@ def _write(args, rows):
         w("- **No market impact model.** Stated, not omitted. Ignoring impact biases PnL ")
         w("UPWARD; the break-even table partially absorbs this.\n")
         w(f"- **Position**: single unit of {TRADE_SIZE_SHARES} shares, no inventory, flat at ")
-        w("the horizon. Trades only when |prediction| exceeds the 0.5-tick deadband.\n")
+        w("the horizon. Direction is the SIGN of the prediction — **the deadband is 0**, not ")
+        w("the labels' 0.5 ticks. A scaled sign predictor cannot emit a magnitude above half ")
+        w("a tick at these horizons, so a 0.5-tick trading threshold took zero trades on ")
+        w("every unfitted rung. That change was made after seeing an empty table, which makes ")
+        w("it a choice informed by protocol-C output; it is logged in `DECISIONS.md` and the ")
+        w("reasoning is a-priori, but it is disclosed here rather than presented as frozen.\n")
         w("- **Latency**: the signal formed at t acts at t+delta. A signal whose edge is gone ")
         w("by 100ms is latency arbitrage, not alpha — and the phase-1 adversary measured that ")
         w("OFI's content decays inside 100ms, so the 100ms rung is expected to be brutal.\n\n")
@@ -259,28 +409,89 @@ def _write(args, rows):
             w("turns the DSR into an ordinary Sharpe probability wearing a rigorous name. ")
             w("The honest trial count comes from `RESULTS.md`'s trial log.\n\n")
 
-        w("## Break-even cost table (the headline)\n\n")
-        w("The per-share cost at which each rung's PnL crosses zero. Negative means the rung ")
-        w("is already underwater before any additional cost — reported, not clipped.\n\n")
-        w("| ticker | clock | h | rung | latency | trades | gross ticks/trade | net PnL $ | "
-          "break-even (ticks) | break-even (bps) | PnL CI lo | PnL CI hi | DSR |\n")
-        w("|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+        w("## What the headline column is, and what it is not\n\n")
+        w("**`be total (ticks)` is the headline.** It is computed on the GROSS (mid-to-mid) ")
+        w("series, so it is the total per-share, per-side cost the signal can bear before it ")
+        w("stops paying — inclusive of every cost, which is what lets a reader who rejects ")
+        w("the assumed fee schedule substitute their own number.\n\n")
+        w("**`be incr (ticks)` is the old headline and it is nearly model-invariant.** It is ")
+        w("computed on the NET series, so it reports the cost *on top of* a spread already ")
+        w("crossed and a fee already paid, and for an always-on strategy that is dominated by ")
+        w("the spread. The `CTRL always long` / `CTRL always short` rows are in the table for ")
+        w("exactly this reason: the constant controls land INSIDE the ladder's range on that ")
+        w("column, so it cannot answer PLAN.md's question. It is retained, demoted, because ")
+        w("deleting a column the earlier draft led with would hide the correction.\n\n")
+        w("**`ORACLE perfect foresight` is a bound, not a rung.** It trades the realised sign ")
+        w("of the move, i.e. it sees the future. Read it as the ceiling this fill model ")
+        w("permits: if the oracle is underwater, no predictor on this ladder could have paid.")
+        w("\n\n")
+        w("## Break-even cost table\n\n")
+        w("Negative means underwater — reported, not clipped. `gross t/trade` is the column ")
+        w("that discriminates between rungs; it carries a block-bootstrap CI and the worst of ")
+        w("the five folds beside it, per CLAUDE.md rule 4.\n\n")
+        w("| ticker | clock | h | rung | latency | trades | gross t/trade | gross CI lo | "
+          "gross CI hi | worst fold | be total (ticks) | net PnL $ | mean PnL/trade $ | "
+          "mean CI lo | mean CI hi | be incr (ticks) | be incr (bps) | DSR gross |\n")
+        w("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
         for r in rows:
             w(f"| {r['ticker']} | {r['clock']} | {r['h']} | {r['rung']} | "
               f"{r['delta_ms']:.0f}ms | {r['n_trades']} | "
-              f"{_f(r.get('gross_ticks_per_trade'), 4)} | {_f(r.get('total_pnl'), 2)} | "
+              f"{_f(r.get('gross_ticks_per_trade'), 4)} | "
+              f"{_f(r.get('gross_ci_lo'), 4)} | {_f(r.get('gross_ci_hi'), 4)} | "
+              f"{_f(r.get('worst_fold_gross'), 4)} | "
+              f"{_f(r.get('be_total_ticks'))} | {_f(r.get('total_pnl'), 2)} | "
+              f"{_f(r.get('mean_pnl'), 4)} | "
+              f"{_f(r.get('ci_lo'), 4)} | {_f(r.get('ci_hi'), 4)} | "
               f"{_f(r.get('be_ticks'))} | {_f(r.get('be_bps'), 2)} | "
-              f"{_f(r.get('ci_lo'), 4)} | {_f(r.get('ci_hi'), 4)} | {_f(r.get('dsr'), 3)} |\n")
+              f"{_f(r.get('dsr'), 3)} |\n")
         w("\n")
+
+        w("## Per-fold gross ticks/trade under protocol C\n\n")
+        w("No pooled number travels alone (CLAUDE.md rule 4). Reference latency only.\n\n")
+        w("| ticker | clock | h | rung | per-fold gross ticks/trade | worst |\n")
+        w("|---|---|---|---|---|---|\n")
+        ref_ms = LATENCIES_NS[0] / 1e6
+        for r in rows:
+            if abs(r["delta_ms"] - ref_ms) > 1e-9 or not r.get("per_fold_gross"):
+                continue
+            vals = ", ".join(f"{v:.4f}" for v in r["per_fold_gross"])
+            w(f"| {r['ticker']} | {r['clock']} | {r['h']} | {r['rung']} | {vals} | "
+              f"{_f(r.get('worst_fold_gross'), 4)} |\n")
+        w("\n")
+
+        w("## Diebold-Mariano between adjacent rungs (gross PnL per trade)\n\n")
+        w("Loss is `-gross ticks`, so a NEGATIVE statistic means the upper rung earns more. ")
+        w("Paired on the trades both rungs took; HAC lag = the bootstrap block length. ")
+        w("Adjacent rungs are largely NESTED (L3's feature set contains L2's) and standard DM ")
+        w("is undersized there, so read these as indicative, not decisive — ")
+        w("`EVAL_PROTOCOL.md` sec. 2 asks for the Giacomini-White variant, which is not ")
+        w("implemented.\n\n")
+        w("| ticker | clock | h | upper | lower | n | mean diff (ticks) | DM stat | p |\n")
+        w("|---|---|---|---|---|---|---|---|---|\n")
+        for d in dm_rows:
+            w(f"| {d['ticker']} | {d['clock']} | {d['h']} | {d['upper']} | {d['lower']} | "
+              f"{d['n']} | {_f(d['mean_diff_ticks'], 4)} | {_f(d['dm_stat'], 3)} | "
+              f"{_f(d['p_value'], 4)} |\n")
+        w("\n")
+
         w("## Reading notes\n\n")
-        w("- A break-even cost BELOW the assumed take fee of $0.0030/share (0.30 ticks) means ")
-        w("the rung does not pay for its own fees, before any spread cost.\n")
-        w("- The PnL confidence interval is a circular block bootstrap with block length >= ")
-        w("the label horizon; resampling individual trades would ignore the serial dependence ")
-        w("that makes the naive interval far too narrow.\n")
-        w("- Trade counts differ across rungs because the deadband bites differently: a rung ")
-        w("whose predictions rarely exceed half a tick simply does not trade, which is a ")
-        w("result rather than a missing row.\n")
+        w("- **The confidence intervals are on the MEAN per trade**, which is what a block ")
+        w("bootstrap of a mean returns. An earlier draft printed them beside the TOTAL PnL, ")
+        w("where they were off by a factor of `n_trades` in every row.\n")
+        w("- Both intervals are circular block bootstraps with block length >= the label ")
+        w("horizon; resampling individual trades would ignore the serial dependence that ")
+        w("makes the naive interval far too narrow.\n")
+        w("- **The DSR is on the GROSS series.** On the net series every rung has a Sharpe ")
+        w("near -7.6 (it loses the spread almost deterministically), and the DSR is 0.000 at ")
+        w("every trial count from 1 to 1e12 — a tautology rather than a finding. Deflation ")
+        w("only means something where there is something to deflate.\n")
+        w("- **Trade counts differ across rungs only where a prediction is exactly zero**, not ")
+        w("because of a deadband (there isn't one). The decision set comes from the stamp ")
+        w("vector, so every rung trades at identical times; `qi_touch == 0` on 10.5% of AMZN ")
+        w("calendar stamps (bid size exactly equal to ask size) is the whole of the gap.\n")
+        w("- **Net PnL is not comparable across latency rows on the event clock**, where the ")
+        w("decision set itself shifts with latency. The per-trade columns are the comparable ")
+        w("ones.\n")
 
 
 if __name__ == "__main__":

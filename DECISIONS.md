@@ -430,3 +430,125 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   MCC). The regression metrics (R^2 vs zero, and IC) are the informative ones at these
   horizons; fixing the classification treatment properly means a quantile-based threshold and
   is left as future work rather than bolted on late.
+
+## Phase 3 rework after the 2026-08-02 red team
+
+- 2026-08-02 — **The headline break-even column is now computed on the GROSS series, not the
+  net one.** The old column was incremental to a spread already crossed and a fee already
+  paid, which made it very nearly model-invariant: the adversary showed a constant always-long
+  predictor scores -0.8072 ticks on INTC calendar 1s against a whole-ladder range of
+  [-0.8025, -0.7702], i.e. *inside* it, and that perfect foresight of the 1s mid sign still
+  loses $456. A column a constant cannot be distinguished from cannot answer PLAN.md's
+  question. `break_even_total_ticks` reports the total per-side cost the signal can bear, so a
+  reader who rejects the assumed fee schedule can substitute their own — which is what the
+  break-even table was always supposed to allow. The incremental column is RETAINED and
+  demoted rather than deleted: removing the number an earlier draft led with would hide the
+  correction instead of recording it.
+- 2026-08-02 — **The constant and oracle controls ship as rows in the table.** always-long,
+  always-short, and perfect foresight run on the same rows, folds, mask and fills as the
+  ladder. The adversary had to compute them to find the model-invariance; a reader should not
+  have to. The oracle is labelled a BOUND, not a rung — it reads the future by construction
+  and its feature list says so.
+- 2026-08-02 — **The deflated Sharpe is reported on the gross series.** On the net series
+  every rung has a per-trade Sharpe near -7.6 (it loses the spread almost deterministically)
+  and the DSR is 0.000 at every trial count from 1 to 1e12. That is a tautology, not a
+  finding. Deflation only means something where there is something to deflate; the net DSR is
+  kept in the row dict but is not the reported column.
+- 2026-08-02 — Trial count for the DSR set to **984** (SUPERSEDED the same day by the
+  phase-2 rework below, which raised it to 2,056): 288 phase-2 ladder fits + 480
+  embargo-sweep fits (5 values x 16 cells x 6 rungs) + 216 phase-3 cost configurations
+  (2 tickers x 2 clocks x 2 horizons x 9 predictors x 3 latencies). The previous run passed
+  `--trials 288`, which is phase 2's count and excludes phase 3's own trials entirely.
+  The arguable component is the embargo sweep: it is a pre-registered sensitivity whose value
+  was frozen by rule and which never selected anything, so a case exists for excluding it the
+  way trials 1-4 are excluded. It is counted anyway. Undercounting is the failure mode that
+  makes a deflated Sharpe dishonest; overcounting only makes the threshold harder to clear,
+  and the direction of the error should favour the reader, not the result.
+- 2026-08-02 — `_non_overlapping` carries its watermark ACROSS fold boundaries. Resetting it
+  per fold allowed a position opened at the end of one test block to still be open when the
+  next block opened one: 4 gaps of 800-1000ms against a required 1001ms on INTC calendar 1s.
+  Immaterial to the number (4/17,042) but it falsified the module's own stated invariant, and
+  the test that would have caught it did not cover the boundary. It does now, together with
+  its own mutation test.
+- 2026-08-02 — Diebold-Mariano between adjacent rungs is wired to the report. The function was
+  implemented, unit-tested, imported into `costs/run.py` and never called, so an
+  `EVAL_PROTOCOL.md` sec. 2 deliverable existed as dead code. Loss is `-gross ticks` per trade
+  via a new `loss="linear"` mode: squaring a PnL would test whether one rung's PnL is larger
+  in MAGNITUDE, which is the wrong hypothesis. Nestedness is flagged in the report, since
+  standard DM is undersized there and Giacomini-White is not implemented.
+- 2026-08-02 — The bps denominator is the mean ask over TRADED rows, not over the whole
+  session. Segment 0 is never tested and does not belong in the average price. Effect is
+  <0.5%; it is a correctness fix, not a result change.
+- 2026-08-02 — The report header now echoes the FULL effective argument set. The old header
+  printed `--seed 0 --trials 288` while `--clocks` defaults to `calendar`, so the command the
+  table advertised rebuilt half the table — a direct violation of CLAUDE.md rule 7.
+- 2026-08-02 — The 0-tick deadband is disclosed in the report as a choice informed by
+  protocol-C output rather than presented as frozen. The reasoning is a-priori (a scaled sign
+  predictor cannot emit a magnitude above half a tick at these horizons) but the change was
+  triggered by seeing an empty table, which is CLAUDE.md rule 5 territory. Disclosed, not
+  reverted: reverting would restore a table with no rows for the baseline the project exists
+  to test.
+
+## Phase 2 rework after the 2026-08-02 red team
+
+- 2026-08-02 — **The through-origin rescale is now fitted on a held-out slice of the training
+  fold, not in-sample.** This is the largest correction in the project. The old scale solved
+  `sum(s*y)/sum(s*s)` on the same rows the model was fitted on; for a high-capacity rung whose
+  in-sample predictions are near-perfect, that returns essentially no shrinkage, so the
+  out-of-sample amplitude is far too large and R2-vs-zero explodes negative. Every large
+  negative protocol-C R2 in the earlier ladder was this artifact, NOT a finding: INTC calendar
+  1s L4 goes from C = -0.2988 to C = +0.0213, and its A-C gap from 0.4898 to 0.1618. The
+  artifact never bit under protocol A, because A's "out-of-sample" rows are the temporal
+  neighbours of its training rows — so it inflated the *measured optimism*, not just the
+  model. Holdout is the last 20% of the training rows in time; under A, where training rows
+  are not time-ordered, a seeded random 20%, which is A's own logic applied to A.
+- 2026-08-02 — **Protocol D added as a control**: C's test blocks, trained on everything
+  outside them, past AND future, no purge. It holds the test universe, fold shapes and
+  aggregation fixed and varies only "may the model see the future". It exists because the
+  A-B / B-C decomposition attributed the wrong mechanisms — see the next entry. D is NOT a
+  fourth protocol under study; `HEADLINE_PROTOCOLS` stays (A, B, C).
+- 2026-08-02 — **`B - C` is no longer described as "the label-overlap component".** The claim
+  was wrong and the earlier README drew a reviewer-facing conclusion from it ("purging is not
+  where the money is"). Under expanding walk-forward, purge+embargo can only remove the last
+  `h + E` of a multi-hour training set: 578 of 90,333 rows (0.64%) at INTC calendar 1s. A
+  column that can touch 1% of the training set is not a measurement of label overlap in
+  general — only of label overlap at a walk-forward boundary, where it is negligible by
+  construction. Measured with D: training on the future in disjoint blocks is worth ~0.01-0.05
+  IC, while temporal adjacency of training rows is worth 0.11-0.36. Label overlap is large and
+  it lives inside `A - B`.
+- 2026-08-02 — **The frozen-predictor artifact floor ships as its own table.** L1 was supposed
+  to be the control that made the decomposition readable, and it is not sufficient: its
+  "one-parameter rescale" is fitted, so its gap mixes a partition artifact with a refit
+  effect. The real control is a predictor fitted ONCE on the whole day and scored unchanged
+  under every protocol, where any difference is 100% partition artifact. It is not zero
+  (A-C = +0.0014 to +0.0271), because A's fold mean is the sum(y^2)-weighted average of the
+  day while C's is unweighted — two different estimands. The frozen gap reproduces the old L1
+  IC row to five decimals, which is what proves the L1 row contained no leakage signal at all.
+- 2026-08-02 — The headline table now carries `A-C med` (gap from per-fold medians) and
+  `A-C ex0` (fold 0 dropped) beside the mean. 45 of 80 rows in the earlier draft lost more
+  than half their gap when fold 0 was dropped, and the mean is the number that gets quoted.
+- 2026-08-02 — The superseded in-sample-calibration columns are retained behind
+  `--in-sample-scale` and printed in their own section, so the size of the correction is
+  visible rather than asserted. Deleting them would hide what changed.
+- 2026-08-02 — `ALPHA_TICKS` is imported from `edge.features.labels` rather than re-declared
+  in `harness/run.py`. The copy could silently diverge from the labels' own deadband, which
+  would classify predictions against a different threshold than the labels were built with.
+- 2026-08-02 — The ladder report header echoes the full effective argument set, and the
+  embargo sweep sorts numerically rather than lexically (E was ordering 0, 1, 10, 300, 60).
+  The prose claiming an `r2_test_mean` column was removed: no such column was ever emitted.
+- 2026-08-02 — **The artifact floor is measured at three rung magnitudes, not one.** The second
+  red-team pass of the day showed the first version of this fix was itself insufficient: the
+  frozen floor measured with `sign(queue imbalance)` is +0.00136, but the identical
+  construction at L4's magnitude is +0.01615 — an order of magnitude larger — so quoting the
+  L1 floor beside an L4 gap understates what that gap has to clear. The floor is an
+  interaction between the fold-aggregation asymmetry and the predictor's own variance, so it
+  scales with the predictor. `edge.harness.floors` is a separate entry point because a floor
+  costs one fit per (cell, rung) while the ladder costs five per protocol.
+- 2026-08-02 — **The "ladder inverts under protocol C" claim is withdrawn.** It was an artifact
+  of the in-sample calibration and did not survive the fix: under the causal scale L4 beats L1
+  in 13 of 16 cells, and the median protocol-C R2 goes L1 +0.0091, L3 +0.0266, L4 +0.0273. Two
+  metrics already printed in the same report said so and were not read — under C the median IC
+  runs L3 0.2364 > L4 0.1839 > L1 0.1465, and the median balanced accuracy runs L4 0.3926 >
+  L3 0.3760 > L1 0.3333, which is chance exactly. The corrected claim is narrower: optimism
+  still scales with capacity, and the honest protocol-C performance of the fitted rungs is
+  small but positive.

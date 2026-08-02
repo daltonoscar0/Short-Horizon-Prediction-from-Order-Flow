@@ -17,6 +17,7 @@ from edge.harness.models import (
     L1Sign,
     L2OLS,
     L3Ridge,
+    Rung,
     _fit_scale,
     build_ladder,
 )
@@ -181,3 +182,77 @@ class TestLadderShape(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCausalScaleIsNotTheInSampleScale(unittest.TestCase):
+    """The 2026-08-02 red team's largest finding, as executable checks."""
+
+    def test_holdout_scale_is_fitted_on_the_held_out_rows_only(self):
+        # Raw score = x. On the model rows y = 1*x; on the holdout rows y = 3*x. A scale
+        # fitted in-sample would return ~1; fitted on the holdout it must return 3.
+        rng = np.random.default_rng(0)
+        x = rng.normal(size=200)
+        X = x.reshape(-1, 1)
+        hold = np.zeros(200, dtype=bool)
+        hold[100:] = True
+        y = np.where(hold, 3.0 * x, 1.0 * x)
+
+        class Identity(Rung):
+            name = "identity"
+            features = ("x",)
+
+            def _raw(self, Xa):
+                return Xa[:, 0]
+
+        r = Identity().fit(X, y, scale_holdout=hold)
+        self.assertAlmostEqual(r.scale_, 3.0, places=9)
+
+        r_insample = Identity().fit(X, y)
+        self.assertLess(abs(r_insample.scale_ - 2.0), 0.35)  # blends both regimes
+
+    def test_a_degenerate_holdout_is_rejected_not_silently_ignored(self):
+        X = np.arange(20, dtype=np.float64).reshape(-1, 1)
+        y = X[:, 0].copy()
+
+        class Identity(Rung):
+            name = "identity"
+            features = ("x",)
+
+            def _raw(self, Xa):
+                return Xa[:, 0]
+
+        with self.assertRaises(ValueError):
+            Identity().fit(X, y, scale_holdout=np.ones(20, dtype=bool))
+        with self.assertRaises(ValueError):
+            Identity().fit(X, y, scale_holdout=np.zeros(20, dtype=bool))
+
+    def test_an_overfitting_rung_gets_shrunk_by_the_causal_scale(self):
+        """The mechanism: in-sample calibration cannot shrink a model that fits its own
+        training rows almost perfectly, so out-of-sample amplitude is too large."""
+        rng = np.random.default_rng(3)
+        n = 400
+        x = rng.normal(size=n)
+        noise = rng.normal(size=n)
+        y = 0.1 * x + noise  # mostly unpredictable
+
+        class Overfit(Rung):
+            """A raw score that is the label itself on training rows -- a stand-in for a
+            high-capacity model that has memorised its training set."""
+
+            name = "overfit"
+            features = ("x",)
+
+            def _fit_raw(self, Xa, ya):
+                self.memo_ = dict(zip(Xa[:, 0].tolist(), ya.tolist()))
+
+            def _raw(self, Xa):
+                return np.array([self.memo_.get(v, 0.0) for v in Xa[:, 0]])
+
+        hold = np.zeros(n, dtype=bool)
+        hold[int(n * 0.8):] = True
+        causal = Overfit().fit(x.reshape(-1, 1), y, scale_holdout=hold)
+        insample = Overfit().fit(x.reshape(-1, 1), y)
+        # In-sample sees a perfect fit and applies no shrinkage; causal sees the memoriser
+        # return 0.0 on unseen rows and shrinks hard.
+        self.assertAlmostEqual(insample.scale_, 1.0, places=6)
+        self.assertLess(causal.scale_, insample.scale_)

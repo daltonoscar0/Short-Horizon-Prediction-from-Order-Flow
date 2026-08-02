@@ -152,6 +152,59 @@ class TestBreakEvenCost(unittest.TestCase):
         self.assertAlmostEqual(c, (9 * 1.20) / (2 * 100 * 9), places=12)
 
 
+class TestTotalBreakEvenIsNotTheIncrementalOne(unittest.TestCase):
+    """The 2026-08-02 red team's headline correction, as an executable check."""
+
+    def test_hand_computed_total_break_even(self):
+        from edge.costs.pnl import break_even_total_ticks
+
+        # Gross $12.00 over 10 round trips of 100 shares -> c = 12/(2*100*10) = $0.006/share
+        # = 0.6 ticks. Same arithmetic as the incremental version; the DIFFERENCE is which
+        # series it is fed.
+        self.assertAlmostEqual(
+            break_even_total_ticks(np.full(10, 1.20), n_trades=10, shares=100),
+            0.6, places=12,
+        )
+
+    def test_the_two_columns_differ_by_the_costs_already_paid(self):
+        from edge.costs.pnl import break_even_total_ticks
+
+        # A signal earning 0.02 ticks/trade gross that pays a 1.61-tick round trip: gross
+        # $0.02, net $0.02 - $1.61 (per 100 shares, in dollars: 0.02 and -1.59).
+        gross = np.full(100, 0.02)
+        net = gross - 1.61
+        total = break_even_total_ticks(gross, n_trades=100, shares=100)
+        incr = break_even_cost_ticks(net, n_trades=100, shares=100)
+        self.assertGreater(total, 0.0)   # the signal can pay SOMETHING
+        self.assertLess(incr, 0.0)       # but not what it is already being charged
+        self.assertAlmostEqual(total - incr, 1.61 / (2 * 100) / 0.01, places=9)
+
+    def test_incremental_break_even_cannot_separate_a_constant_from_a_signal(self):
+        """Why the column was demoted, at the magnitudes actually measured on this data.
+
+        INTC calendar 1s: L1 earns 0.0213 gross ticks/trade, a constant always-short earns
+        0.0027 on the same trades, and the round trip costs 1.61 ticks. The signal is ~8x the
+        constant, and the incremental column puts them 1% apart — inside its own rounding.
+        """
+        from edge.costs.pnl import break_even_total_ticks
+
+        # Dollars per 100-share round trip: ticks * $0.01 * 100 shares.
+        def dollars(ticks):
+            return ticks * 0.01 * 100
+
+        signal_gross = np.full(1000, dollars(0.0213))
+        const_gross = np.full(1000, dollars(0.0027))
+        spread_cost = dollars(1.61)
+
+        incr_signal = break_even_cost_ticks(signal_gross - spread_cost, 1000, shares=100)
+        incr_const = break_even_cost_ticks(const_gross - spread_cost, 1000, shares=100)
+        self.assertLess(abs(incr_signal - incr_const) / abs(incr_const), 0.02)
+
+        tot_signal = break_even_total_ticks(signal_gross, 1000, shares=100)
+        tot_const = break_even_total_ticks(const_gross, 1000, shares=100)
+        self.assertGreater(tot_signal / tot_const, 7.0)
+
+
 class TestPassiveIsASensitivityNotTheHeadline(unittest.TestCase):
     def test_unfilled_rows_contribute_zero(self):
         pnl = passive_round_trip_pnl(
@@ -192,7 +245,7 @@ class TestNonOverlappingDecisions(unittest.TestCase):
         # Stamps 100ms apart, horizon 1s, latency 0 -> a position opened at t closes at
         # t+1s, so the next eligible decision is 10 stamps later.
         ts = np.arange(50, dtype=np.int64) * 100_000_000
-        keep = _non_overlapping(ts, horizon_ns=1_000_000_000, delta_ns=0)
+        keep, _ = _non_overlapping(ts, horizon_ns=1_000_000_000, delta_ns=0)
         kept = np.flatnonzero(keep)
         self.assertEqual(kept.tolist(), list(range(0, 50, 10)))
 
@@ -201,7 +254,7 @@ class TestNonOverlappingDecisions(unittest.TestCase):
 
         # delta 100ms + horizon 1s = 1.1s span -> 11 stamps apart on a 100ms grid.
         ts = np.arange(50, dtype=np.int64) * 100_000_000
-        keep = _non_overlapping(ts, horizon_ns=1_000_000_000, delta_ns=100_000_000)
+        keep, _ = _non_overlapping(ts, horizon_ns=1_000_000_000, delta_ns=100_000_000)
         kept = np.flatnonzero(keep)
         self.assertEqual(kept.tolist(), [0, 11, 22, 33, 44])
 
@@ -211,7 +264,7 @@ class TestNonOverlappingDecisions(unittest.TestCase):
         rng = np.random.default_rng(0)
         ts = np.cumsum(rng.integers(1, 500_000_000, size=2000)).astype(np.int64)
         horizon = 1_000_000_000
-        keep = _non_overlapping(ts, horizon_ns=horizon, delta_ns=0)
+        keep, _ = _non_overlapping(ts, horizon_ns=horizon, delta_ns=0)
         chosen = ts[keep]
         # Every consecutive pair must be at least the holding span apart.
         self.assertTrue(np.all(np.diff(chosen) >= horizon))
@@ -220,5 +273,77 @@ class TestNonOverlappingDecisions(unittest.TestCase):
         from edge.costs.run import _non_overlapping
 
         ts = np.array([5, 6, 7], dtype=np.int64) * 1_000_000_000
-        keep = _non_overlapping(ts, horizon_ns=1_000_000_000, delta_ns=0)
+        keep, _ = _non_overlapping(ts, horizon_ns=1_000_000_000, delta_ns=0)
         self.assertTrue(bool(keep[0]))
+
+    def test_spacing_holds_ACROSS_fold_boundaries(self):
+        """The invariant is about positions, and positions do not know about folds.
+
+        Regression test for the 2026-08-02 red team: `next_free` used to reset per fold, so a
+        position opened at the end of one test block could still be open when the next block
+        opened one. Measured on the shipped table as 4 gaps of 800-1000ms against a required
+        1001ms, one per fold boundary.
+        """
+        from edge.costs.run import _non_overlapping
+
+        span = 1_000_000_000
+        # Fold 1's last kept decision is at 1.5s and is still open until 2.5s. Fold 2 opens
+        # at 2.0s, inside that window -- the exact shape of the 4 boundary violations the
+        # red team measured.
+        fold1 = np.array([0, 1_500], dtype=np.int64) * 1_000_000
+        fold2 = np.arange(2_000, 3_000, 100, dtype=np.int64) * 1_000_000
+
+        keep1, watermark = _non_overlapping(fold1, horizon_ns=span, delta_ns=0)
+        keep2, _ = _non_overlapping(fold2, horizon_ns=span, delta_ns=0, next_free=watermark)
+
+        chosen = np.concatenate([fold1[keep1], fold2[keep2]])
+        self.assertTrue(
+            np.all(np.diff(chosen) >= span),
+            f"positions overlap across the boundary: gaps {np.diff(chosen).tolist()}",
+        )
+
+    def test_resetting_per_fold_is_what_the_regression_test_catches(self):
+        """The broken version must actually fail the check above, or the test is a comment."""
+        from edge.costs.run import _non_overlapping
+
+        span = 1_000_000_000
+        fold1 = np.array([0, 1_500], dtype=np.int64) * 1_000_000
+        fold2 = np.arange(2_000, 3_000, 100, dtype=np.int64) * 1_000_000
+
+        keep1, _ = _non_overlapping(fold1, horizon_ns=span, delta_ns=0)
+        keep2, _ = _non_overlapping(fold2, horizon_ns=span, delta_ns=0)  # reset: the bug
+        chosen = np.concatenate([fold1[keep1], fold2[keep2]])
+        self.assertTrue(np.any(np.diff(chosen) < span))
+
+
+class TestCostControls(unittest.TestCase):
+    """The controls exist to make the headline column falsifiable. They must not be fitted."""
+
+    def test_constant_direction_never_flips_with_the_data(self):
+        from edge.costs.run import _ConstantDirection
+
+        long_ctrl = _ConstantDirection(+1.0, "CTRL always long")
+        X = np.zeros((100, 0))
+        # A strongly negative label would flip a fitted through-origin rescale. A control
+        # that flips is not a control.
+        long_ctrl.fit(X, np.full(100, -5.0))
+        self.assertTrue(np.all(long_ctrl.predict(X) > 0))
+
+        short_ctrl = _ConstantDirection(-1.0, "CTRL always short")
+        short_ctrl.fit(X, np.full(100, +5.0))
+        self.assertTrue(np.all(short_ctrl.predict(X) < 0))
+
+    def test_oracle_reproduces_the_sign_of_the_realised_move(self):
+        from edge.costs.run import _Oracle
+
+        oracle = _Oracle("label_y_mid_1s")
+        y = np.array([0.5, -0.5, 0.0, 2.0], dtype=np.float64)
+        X = y.reshape(-1, 1)
+        oracle.fit(X, y)
+        np.testing.assert_array_equal(oracle.predict(X), np.array([1.0, -1.0, 0.0, 1.0]))
+
+    def test_oracle_declares_the_label_as_its_feature(self):
+        """It reads the future by construction; the feature list is where that is visible."""
+        from edge.costs.run import _Oracle
+
+        self.assertEqual(_Oracle("label_y_mid_5s").features, ("label_y_mid_5s",))

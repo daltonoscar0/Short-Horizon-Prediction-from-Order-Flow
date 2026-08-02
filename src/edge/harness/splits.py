@@ -130,7 +130,21 @@ def make_folds(ts_ns, horizon_ns, protocol, n_folds=N_FOLDS, embargo_ns=None, se
         # purge/embargo mask -- that is what makes B->C a clean measurement of label overlap
         # rather than a mixture of several changes at once.
         past_mask = ts < block_start
-        if protocol == "C":
+        if protocol == "D":
+            # Protocol D: C's test block exactly, but training on EVERYTHING outside it --
+            # past and future, no purge, no embargo. Added 2026-08-02 after the phase-2 red
+            # team showed the A-B / B-C decomposition attributes the wrong mechanisms.
+            #
+            # D holds the test universe, the fold shapes and the fold aggregation fixed and
+            # varies ONLY "may the model see the future". So:
+            #   A - D  is the fold-geometry and adjacency channel
+            #   D - C  is training on the future in DISJOINT blocks
+            # Measured, D - C is worth ~0.01-0.05 in IC while A - D is worth 0.11-0.36:
+            # nearly all of A's advantage comes from training rows temporally ADJACENT to
+            # test rows, not from the future per se. That is label overlap, and it sits
+            # inside A-B rather than in B-C.
+            train_mask = ~test_mask
+        elif protocol == "C":
             last_test_ts = int(ts[test_idx].max())
             keep = _purge_embargo(
                 ts, block_start, last_test_ts, int(horizon_ns), embargo_ns

@@ -54,7 +54,7 @@ Six family modules, 144 raw columns plus a seasonality-adjusted twin of each non
 - **Queue imbalance** — touch, per level, and depth-weighted under uniform / 1/m / exponential
   weights. `sign(qi_touch)` is baseline L1.
 - **Microprice** — Stoikov (2018), the **iterated** absorbing/transient estimate, not the
-  first-order term and emphatically not a synonym for weighted mid (see §7).
+  first-order term and emphatically not a synonym for weighted mid (see §8).
 - **Trade** — signed volume, counts, effective spread, aggressor sign. LOBSTER gives the
   direction explicitly, so no Lee–Ready classification is needed.
 - **State** — spread in ticks, depth, book slope, realized volatility, event intensity,
@@ -86,10 +86,38 @@ is enforced by the environment rather than by discipline.
 | **A** shuffled k-fold | everything outside the test fold, *including the future* | none | none |
 | **B** walk-forward | everything strictly before the test block | none | none |
 | **C** purged walk-forward | strictly before, minus contaminated rows | h | E |
+| **D** *control* | everything outside C's test block, past **and** future | none | none |
 
 - **A − C** is total optimism.
-- **B − C** isolates the label-overlap component (B is already strictly forward in time).
-- **A − B** is the residual: training on the future outright.
+- **A − D** is fold geometry plus the **temporal adjacency** of training rows — this is where
+  label overlap actually lives, and it is the large term: median +0.2964 R² for L4, which is
+  93% of that rung's whole A−C gap.
+- **D − C** is training on the future in blocks *disjoint* from the test set — median +0.0067
+  for L4. Handing a model the whole future, but not the neighbours of the test rows, buys it
+  very little. The split is capacity-dependent: for L3 the future is worth 44% of the gap, for
+  L4 only 2%. A model with enough capacity to memorise needs a near-duplicate, not the future.
+- **B − C** is the purge/embargo effect **at a walk-forward boundary**, which is near zero for
+  an arithmetic reason: purge+embargo can only remove the last `h + E` of a multi-hour
+  training set, 0.6–1.1% of rows.
+
+**This corrects an earlier labelling.** `B − C` was described as "the label-overlap component"
+and `A − B` as "training on the future outright". Both were wrong, and protocol D — added
+2026-08-02 after the phase-2 red team — is what measures the difference. A near-zero `B − C`
+does not license the conclusion that label overlap is unimportant.
+
+**Calibration is causal.** Every rung's raw score is mapped into label units by a
+through-origin scale fitted on a **held-out last 20%** of each fold's training rows (a seeded
+random 20% under A, where training rows are not time-ordered). Fitting it in-sample — as the
+first draft did — returns almost no shrinkage for a high-capacity rung, inflating the
+out-of-sample amplitude until R²-vs-zero goes sharply negative. That artifact produced every
+large negative protocol-C R² in the earlier ladder, and because it never bites under A, it
+inflated the measured optimism itself.
+
+**The artifact floor is measured.** A frozen predictor — fitted once on the whole day, scored
+unchanged under every protocol — still shows a nonzero A−C gap, because A's fold mean
+approximates the `Σy²`-weighted pooled metric while C's is an unweighted average over
+contiguous segments of very unequal `Σy²`. Every headline cell reports that floor beside its
+gap; a rung that does not clear its floor has measured nothing.
 
 **Folds are cut on wall-clock time, not stamp index.** 32% of INTC event-clock stamps sit
 within 0.5 ms of the previous one and carry ~2.3× the correlation of isolated stamps; an index
@@ -124,14 +152,17 @@ leak is a comment.
 | **L3** | ridge on the handcrafted set, standardiser fit per fold on training rows only | 28 |
 | **L4** | gradient boosting on the same set, 200 rounds, no early stopping | many |
 
-L1 is load-bearing. It has no fitted parameters, so its A−C gap is a **floor on what the
-harness itself contributes**: a large L1 gap would mean the decomposition is measuring the
-protocols rather than leakage.
+L1 was intended as the load-bearing control and **is not sufficient for it**. Its
+"one-parameter rescale" is fitted, so its A−C gap mixes a partition artifact with a refit
+effect; the red team showed those two together account for the whole L1/L1m/L2 gap. The real
+control is the frozen predictor described in §4.
 
-Every rung's raw score is mapped into label units by one through-origin scale fitted on
-training rows only, applied uniformly. For least-squares rungs it is exactly 1.0 (residuals are
-orthogonal to fitted values), so it is a no-op for L2/L3 and only puts L1 and L4 on a
-comparable footing. Being rank-preserving, it never changes the IC.
+Every rung's raw score is mapped into label units by one through-origin scale, fitted on a
+held-out slice of the training rows (§4). For least-squares rungs it is close to 1.0 (residuals
+are orthogonal to fitted values in-sample), so it does little for L2/L3 and mainly puts L1 and
+L4 on a comparable footing. Being rank-preserving, it never changes the IC — which is why the
+IC columns are the ones immune to the calibration artifact, and why the surviving result is
+stated on IC.
 
 No early stopping on the GBM: stopping on a slice of the test fold is itself a leak, and
 carving a validation slice out of training is one more free parameter to log.
@@ -147,10 +178,67 @@ carving a validation slice out of training is one more free parameter to log.
   ~96% of INTC labels are flat, so plain accuracy is meaningless.
 - **Never a pooled number alone.** Mean, median and **worst fold** travel together.
 
-## 7. What the red team changed
+## 7. Costs, fills and the break-even number
 
-Four adversary passes ran against artifacts, with fresh context and read-only access. They are
+Protocol C only. A PnL computed under a leaky protocol is not a weaker result, it is a
+misleading one, and §4 exists to establish which protocol to believe.
+
+**The decision sequence.** Signal formed at `t` from information ≤ `t`; earliest action at
+`t + Δ` for Δ ∈ {1ms, 10ms, 100ms}; position closed at `t + Δ + h`. The entry price is read at
+`t + Δ`, which is the whole point of the latency ladder — a signal whose edge is gone by 100ms
+is latency arbitrage, not alpha.
+
+**Fills are aggressive**: buy crosses to the ask, sell to the bid, so a round trip pays the
+full spread plus two take fees. Fees are the commonly-quoted 2012 Nasdaq standard rates
+($0.0030 take / $0.0020 make), entered as an **assumption** and not verified against an
+archived price list.
+
+**Position discipline.** Single unit of 100 shares, no inventory, flat at horizon. Decisions
+are spaced at least `Δ + h` apart, greedily from the earliest eligible stamp, and **the spacing
+watermark carries across fold boundaries** — resetting it per fold let 4 positions on INTC
+calendar 1s open 800–1000ms apart against a required 1001ms. Direction is the sign of the
+prediction; the deadband is 0 (see §9).
+
+**The break-even column is computed on the GROSS (mid-to-mid) series**, so it reports the total
+per-side cost the signal can bear, inclusive of everything. The earlier draft computed it on
+the net series, making it *incremental* to a spread already crossed — which made it nearly
+model-invariant, since an always-on strategy loses almost exactly the spread whatever it
+predicts. The 2026-08-02 red team demonstrated this by scoring a constant always-long predictor
+*inside* the ladder's range. The incremental column is retained and demoted rather than
+deleted, because removing the number an earlier draft led with would hide the correction.
+
+**Controls ship as rows**, on identical rows, folds, mask and fills: always-long, always-short,
+and a perfect-foresight **oracle** that trades the realised sign of the move. The oracle is a
+bound, not a rung — it reads the future by construction, and its feature list says so. It is
+the most informative row in the table: it still loses money.
+
+**Inferential statistics.** Circular block bootstrap (block length ≥ the label horizon in
+stamps) for CIs on the **mean per trade** — an earlier draft printed that interval beside the
+*total* PnL, off by a factor of `n_trades`. Diebold–Mariano between adjacent rungs on per-trade
+gross PnL, with loss `= −gross ticks` (squaring a PnL would test whether one rung's PnL is
+larger in *magnitude*, which is the wrong hypothesis) and a HAC lag equal to the block length.
+Deflated Sharpe on the **gross** series at n = 2,056 trials: on the net series every rung has a
+per-trade Sharpe near −7.6 and the DSR is 0.000 at every trial count from 1 to 10¹², which is a
+tautology rather than a finding.
+
+## 8. What the red team changed
+
+Seven adversary passes ran against artifacts, with fresh context and read-only access. They are
 in `reports/adversary/`. The findings that changed code:
+
+- **The in-sample calibration was inflating the phase-2 headline** (§4). Every large negative
+  protocol-C R² was an artifact of it, and most reported gaps shrank by 20–95% once the scale
+  was fitted causally. The superseded columns are retained in `reports/ladder.md`.
+- **`B − C` was labelled with the wrong mechanism** (§4). Protocol D was added to separate
+  "saw the future" from "saw the neighbours of the test rows"; the second is much larger.
+- **L1 was not a sufficient control** (§5). Replaced by a frozen-predictor floor, which is
+  nonzero and which reproduced the old L1 IC gap to five decimals.
+- **45 of 80 rows lost more than half their gap when fold 0 was dropped**, so the headline
+  table now carries median-based and ex-fold-0 gaps beside the mean.
+- **The phase-3 headline column was model-invariant** and was replaced (see §7). The same pass
+  found the mislabelled confidence intervals, the vacuous deflated Sharpe, the cross-fold
+  position overlap, a reproduction command that rebuilt half its own table, and a stated
+  assumption (a 0.5-tick deadband) that contradicted the code.
 
 - **`mp_micro` was Stoikov's first-order term G¹, not the microprice.** The landing matrix
   B = (I−Q)⁻¹R₂ was never built and the outer recursion G⁽ⁱ⁺¹⁾ = G¹ + B·G⁽ⁱ⁾ never ran. Both
@@ -165,22 +253,28 @@ in `reports/adversary/`. The findings that changed code:
 - **The phase-1 leak triage was read off a truncated console print** (`suspicious[:20]` of a
   488-item list), producing a wrong "AMZN is clean" conclusion.
 
-## 8. Reproduction
+## 9. Reproduction
 
 ```bash
 make data       # raw LOBSTER CSVs -> validated event frame + data-quality report
 make features   # -> data/features/*.parquet + the correlation table
 make selfcheck  # Cont-Kukanov-Stoikov reproduction; fails loudly if the relation breaks
 make test       # the full suite
-python3 -m edge.harness.run --seed 0    # the optimism table
-python3 -m edge.costs.run   --seed 0    # break-even cost table
+python3 -m edge.harness.run --seed 0 --embargo-sweep --in-sample-scale  # the optimism table
+python3 -m edge.harness.floors --seed 0                 # the artifact floor, per rung
+python3 -m edge.costs.run   --seed 0 --trials 2056 \
+    --tickers INTC,AMZN --clocks calendar,event --horizons 1s,5s   # break-even table
 ```
+
+The cost command needs its full argument set: `--clocks` defaults to `calendar` alone, and an
+earlier draft of this file advertised the short form, which rebuilds half the table. Each
+report now echoes the exact arguments that produced it in its own header.
 
 Every entry point takes `--seed`. The feature build is bit-reproducible: a full rebuild was
 compared column-by-column across all four tables (1,028 columns) with zero mismatches,
 including NaN placement.
 
-## 9. Known limitations
+## 10. Known limitations
 
 - **One trading day, two names.** Fold boundaries are intraday blocks; the "split on day
   boundaries first" rule in the protocol is unavailable, and the same-day-vs-next-day leak
@@ -188,6 +282,18 @@ including NaN placement.
 - **2012 data vintage.** Market structure has moved on; these are not present-day numbers.
 - **The Nasdaq fee schedule is an assumption**, not a verified citation (§ `reports/costs.md`).
 - **No market impact model.** Stated, not omitted; ignoring impact biases PnL upward.
+- **Every fill is priced at the touch for 100 shares.** `walk_the_book` and
+  `passive_round_trip_pnl` are unit-tested but never called in the headline path, so the
+  "walk the book beyond displayed size" claim is untested against real data.
+- **The DM tests are indicative, not decisive.** Adjacent rungs are largely nested, where
+  standard Diebold–Mariano is undersized; §2 of the protocol asks for the Giacomini–White
+  variant, which is not implemented.
+- **The calibration slope and AUC are computed but not reported.** `EVAL_PROTOCOL.md` §2 asks
+  for the calibration slope; `calibration_slope` and `auc_binary` are implemented and
+  unit-tested but no report emits them. Logged in `FUTURE.md` rather than dropped.
+- **The trading deadband was set after seeing protocol-C output** (0 ticks, not the labels'
+  0.5). The reasoning is a-priori but the trigger was an empty table; disclosed in the
+  frozen-decisions table of `RESULTS.md` rather than presented as clean.
 - **Not every emitted column has a hand-computed literal test.** Every formula and every
   mutation the audit could construct is covered, but roughly 35 OFI level×window cells, 12
   label columns at the longer horizons, and 5 state columns are pinned only structurally.
