@@ -295,9 +295,15 @@ Specific results that would flip a specific conclusion.
    arithmetic reason — purge can only touch ~1% of an expanding training set. Overnight gaps
    and day-boundary folds change that geometry entirely. If B−C grows to a material fraction
    of A−C on multi-day data, the correct advice to a reviewer changes again.
-5. **L4 beats L1 under protocol C on more than one cell in 96.** The INTC event 1s cell (§1.3)
-   is currently an exception. If it generalises across days and names, the claim "the ladder
-   inverts" is too strong and should become "the ladder inverts on the calendar clock".
+5. **The 13-of-16 margin does not survive more days.** L4 beats L1 under protocol C in 13 of
+   16 cells, which is what withdrew the inversion claim — but 16 cells on one session is a
+   thin basis for a ladder ordering. The three losing cells are all **INTC at the longer
+   horizons** (calendar 5s and 10s, event 10s) — i.e. the large-tick name where the queue
+   signal is strongest and the GBM has least to add. If that pattern is real it is a statement
+   about tick regime × horizon, not about capacity; if the margin goes to chance across twenty
+   sessions, then "the fitted rungs beat the unfitted baseline" is a single-session result and
+   §1.3 should claim only that the inversion was an artifact, without putting an ordering in
+   its place.
 6. **A passive fill model makes something profitable.** Every conclusion in §2 is conditional on
    aggressive fills. If posting at the touch with an explicit queue-position model turns L1's
    0.0106 ticks into something above cost, §2's conclusion is about the fill assumption rather
