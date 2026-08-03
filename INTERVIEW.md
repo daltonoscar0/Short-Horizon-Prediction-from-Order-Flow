@@ -35,24 +35,32 @@ Sharpe. The harness is the deliverable; the models are the detail.
 **Optimism scales with model capacity, and it is adjacency — not the future.** Median R² vs
 zero across 96 cells:
 
-| rung | A − C | *floor* | A − D (adjacency) | D − C (future) | C (honest) |
-|---|---|---|---|---|---|
-| L1 `sign(queue imbalance)` | +0.0043 | *+0.0020* | +0.0126 | −0.0085 | +0.0091 |
-| L3 ridge | +0.0587 | *+0.0020* | +0.0296 | +0.0231 | +0.0266 |
-| L4 GBM | **+0.3173** | *+0.0153* | **+0.2964** | +0.0067 | +0.0273 |
+| rung | A − C | **A′ − C** (calibration rule held constant) | *floor* | A − D (adjacency) | D − C (future) | C (honest) |
+|---|---|---|---|---|---|---|
+| L1 `sign(queue imbalance)` | +0.0043 | **−0.0021** | *+0.0043* | +0.0126 | −0.0085 | +0.0091 |
+| L3 ridge | +0.0587 | **+0.0542** | *+0.0112* | +0.0296 | +0.0231 | +0.0266 |
+| L4 GBM | **+0.3173** | **+0.1379** | *+0.0192* | **+0.2964** | +0.0067 | +0.0273 |
 
-1. **The control is frozen, not L1.** A predictor fitted once and scored unchanged under every
-   protocol still shows a gap (A's fold mean is Σy²-weighted, C's is unweighted), so that is
-   the floor a result must clear. It is measured at each rung's magnitude because it scales
-   with the predictor: L4's floor is 8× L1's. L4's gap clears its floor by ~21×.
+1. **`A − C` has two channels and the control has to see both.** The floor is a frozen model
+   scored under every protocol — but the harness also fits an output *scale* per fold, under a
+   rule that differs by protocol (random 20% under A, last 20% under walk-forward), and A's is
+   exchangeable with A's own test fold. Freeze the scale too and the control goes blind to the
+   larger channel; refit it and the floors go up 2–6×. Held constant, L4's gap halves to
+   **+0.1379** and L1's goes **negative** — a parameter-free rung with no optimism at all, which
+   is what it should show. Standardise on the other rule and L4 goes the other way to +0.5223,
+   so the honest object is a bracket **[+0.138, +0.522]** with the published number mid-range.
+   Restated on raw-score AUC, where there is no amplitude at all, the bracket is tight:
+   **[+0.137, +0.190]** for L4 against a worst-case floor of +0.0383, and L1 never clears its
+   floor under any rule.
 2. **93% of the GBM's gap is temporal adjacency, not the future.** Protocol D hands the model
    the whole future in disjoint blocks and that buys it +0.007. Label overlap is the dominant
    mechanism — and it is invisible in `B − C`, which can only touch ~1% of an expanding
    training set.
 3. **The honest ladder does not invert; it flattens.** L4 beats L1 in 13 of 16 cells, but its
    honest R² is **12.6× smaller** than shuffled k-fold advertises for the same model, and on
-   rank correlation the ridge outranks the GBM. The shuffled protocol does not just inflate —
-   it reorders the ladder.
+   *both* scale-free metrics — rank correlation and AUC — the ridge outranks the GBM. The
+   shuffled protocol does not just inflate, it reorders the ladder, and which rung wins depends
+   on whether you are paid for the amplitude or for the ordering.
 4. **Nothing pays.** L1's signal is real (its gross-PnL CI excludes a constant control) but
    covers ~1% of its trading cost — 0.011 ticks earned against ~0.92 ticks of half-spread plus
    fee. **Perfect foresight of the 1s mid move still loses $458** under aggressive fills, which
@@ -76,11 +84,14 @@ is what the harness was built to make possible.
   calibration, not leakage, produced every large negative protocol-C R² in the first draft;
   the corrected gap is roughly a third of what was first published and the "ladder inverts"
   claim was withdrawn entirely. The superseded columns are still in `reports/ladder.md`.
-- The second phase-2 pass also killed the *first version of the fix*: my artifact floor was
-  measured only at L1's magnitude, which does not bound L4's. That is why the floor now ships
-  per rung.
+- **The floor was wrong twice, and both times a red team found it, not me.** The second phase-2
+  pass killed the first version of the fix — the floor was measured only at L1's magnitude,
+  which does not bound L4's. The third killed the second: it froze the calibration scale as well
+  as the model, so it could not see the channel that turned out to carry half the headline gap.
+  A control that is not exposed to everything the measured thing is exposed to is not a control,
+  and that is the most portable lesson in this repo.
 - Every configuration tried is in the trial log, including the two discarded harness
-  configurations that invalidated their own runs. The deflated Sharpe uses n = 2,056, which
+  configurations that invalidated their own runs. The deflated Sharpe uses n = 2,152, which
   deliberately over-counts, including superseded runs.
 - `DECISIONS.md` records what was chosen without asking and why — including that the phase-3
   trading deadband was set *after* seeing protocol-C output, which is disclosed rather than

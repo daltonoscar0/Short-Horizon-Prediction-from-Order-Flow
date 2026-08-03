@@ -142,11 +142,31 @@ was cut for want of a checkpoint. The study is written up in `FINDINGS.md`, `REA
 - Trials logged: **984** (288 ladder + 480 embargo sweep + 216 cost configurations), which
   deliberately over-counts. See the `RESULTS.md` trial log, including the two discarded
   harness configurations that invalidated their own runs.
-- Adversary passes: 7, all in `reports/adversary/`. The phase-3 pass demoted this project's
-  own headline column.
+- Adversary passes: 9, all in `reports/adversary/`. Three of them killed a headline this repo
+  had already written down.
 
-Known unmet items, carried in `FUTURE.md` rather than quietly dropped: the calibration slope
-and AUC are implemented and tested but not reported; Giacomini–White for nested rungs is not
-implemented, so the DM p-values are indicative; the passive fill model is dead code in the
-headline path; roughly 52 emitted columns are pinned structurally rather than by a
-hand-computed literal.
+**Closed out again 2026-08-03**, after two more `VERDICT: KILLED` passes. The second phase-2
+pass (08-02) was cleared by correcting the science and then, on 08-03, its last unactioned
+instruction — the retracted "L1 is the control" note still standing in `reports/ladder.md`.
+Wiring in `EVAL_PROTOCOL.md` sec. 2's last two unreported metrics is what exposed the rest.
+
+The calibration slope and directional AUC are now reported. The third pass used them to kill two
+things: a calibration-slope *leakage* reading published that morning (it is mechanically forced
+by the harness's protocol-dependent calibration holdout — a frozen model that cannot leak
+reproduces it to three decimals), and the artifact floor itself, which froze the scale along with
+the model and so could not see the channel that matters most. Both are fixed. The consequence is
+a narrower headline: **a large share of L4's `A − C` gap is the calibration rule rather than the
+split** (+0.3173 → +0.1379 with the rule held constant, though standardising on the other rule
+gives +0.5223, so the honest object is the bracket [+0.138, +0.522]), and the like-for-like
+floors are 2–6× what was published (+0.0043 / +0.0112 / +0.0192 at L1/L3/L4 magnitudes). A
+fourth pass then showed the AUC floor was measured at a ceiling and the surviving margins are
+~7×, not ~98×. The capacity ordering survives all of it — on raw-score AUC the gap runs +0.002
+(L1, below its floor) → +0.041 (L3) → +0.174 (L4), positive in 16 of 16 cells for both fitted
+rungs and absent on all three unfitted ones, and it persists at the fold where the two protocols
+train on the same number of rows.
+
+Known unmet items, carried in `FUTURE.md` rather than quietly dropped: Giacomini–White for
+nested rungs is not implemented, so the DM p-values are indicative; the passive fill model is
+dead code in the headline path; the calibration slope is reported but unstable at the cell
+level; roughly 52 emitted columns are pinned structurally rather than by a hand-computed
+literal.

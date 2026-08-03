@@ -552,3 +552,178 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   L3 0.3760 > L1 0.3333, which is chance exactly. The corrected claim is narrower: optimism
   still scales with capacity, and the honest protocol-C performance of the fitted rungs is
   small but positive.
+
+## Closing out — the last unmet spec item and the last unactioned red-team instruction
+
+- 2026-08-03 — **The calibration slope is reported.** `EVAL_PROTOCOL.md` sec. 2 asks for it by
+  name ("slope of realized on predicted, should be ~1; if it's 0.2 your model is confidently
+  wrong at scale"); `harness/metrics.py::calibration_slope` was implemented and unit-tested on
+  2026-07-31 and then never wired into a report, which `FUTURE.md` sec. 3 recorded as an unmet
+  spec item rather than a closed one. It is now a per-fold metric in `score_fold`, summarised
+  across folds like every other, and printed with mean/median/worst beside the IC. The cost was
+  one full ladder re-run for two columns. It is worth it here specifically: this project spent
+  a day on a calibration artifact that a reported slope would have exposed immediately, since
+  the in-sample rescale's whole failure mode is an out-of-sample amplitude that is far too
+  large, and no metric in the old report measured amplitude.
+- 2026-08-03 — **AUC is computed on the directional subset, flats excluded.** `EVAL_PROTOCOL.md`
+  sec. 2 asks for AUC next to the base rate and does not say against which binary. The choice is
+  a-priori and it is the strict one: score up vs down on the rows the 0.5-tick deadband calls
+  directional, never up vs {flat, down} pooled. Pooling would make AUC a function of tie mass —
+  96.3% of INTC calendar 1s labels are exactly flat — and reporting a number on that axis is the
+  exact error the phase-1 red team caught in the correlation table. Under this definition 0.5 is
+  chance in every cell regardless of how flat the cell is. A one-sided test block returns NaN
+  rather than 0.5, so an undefined cell cannot enter a mean as a chance-level row.
+  `tests/test_score_fold.py` constructs a case where the pooled and directional definitions land
+  on opposite sides of chance (0.75 vs 0.00), so a regression to the pooled form fails loudly
+  rather than shifting a decimal.
+- 2026-08-03 — AUC earns its place beside balanced accuracy for a reason the report now states:
+  balanced accuracy and MCC are NULL for the four unfitted rungs. Their rescaled amplitude never
+  crosses the deadband, so the predicted class is always 0, balanced accuracy is exactly 1/3 and
+  MCC is NaN. AUC ranks the raw prediction and never thresholds it, so it is the only
+  classification column carrying directional information for L0/L1/L1m/L2.
+- 2026-08-03 — **The "L1 is the control" reading note is deleted from the ladder report.** It
+  was the one instruction from the second phase-2 red team (`VERDICT: KILLED`) that was never
+  actioned: the science was corrected and `FINDINGS.md` sec. 1.1 was rewritten to "why L1 was
+  not it", but `reports/ladder.md`'s own reading notes still told a reader to treat L1's gap as
+  the floor. Replaced with a pointer to the `floor` column and the two measured magnitudes
+  (+0.0014 at L1's, +0.0161 at L4's). A retracted claim left standing in a generated artifact is
+  worse than one never made, because the artifact looks freshly produced.
+- 2026-08-03 — `make ladder`, `make floors` and `make costs` added. The three phase-2/3 reports
+  were the only tables in the project reproduced by a bare module invocation rather than a make
+  target, and `TRIALS` is a variable rather than a default buried in `costs/run.py` because
+  passing a smaller count silently undeflates the Sharpe.
+- 2026-08-03 — **The re-run adds 0 to the trial count.** The regenerated ladder is the identical
+  configuration at the identical seed — same folds, same rungs, same hyperparameters — with two
+  additional diagnostics computed from the same predictions. The R2 and IC columns reproduce the
+  2026-08-02 table exactly, which is the check that the two new metrics changed nothing else. No
+  new configuration was searched, so counting it as 384 new trials would inflate the denominator
+  with fits that explored nothing. Logged explicitly at +0 rather than left silent, because an
+  unexplained gap between the run log and the trial count is how a trial count stops being
+  trustworthy.
+
+## Phase 2 rework after the 2026-08-03 red team (`VERDICT: KILLED`, third pass)
+
+- 2026-08-03 — **The calibration-slope leakage reading is withdrawn, same day it was
+  published.** The claim was that protocol A's near-1.0 slopes are a leakage signature ("a
+  model is calibrated on rows it has effectively seen"). It is an artifact of the harness's own
+  calibration design. `score_fold` picks the holdout BY PROTOCOL: a random 20% of the training
+  rows under A, the last 20% in time under B/C/D. Under A that holdout is *exchangeable with A's
+  random test fold*, so the reported slope is driven toward 1.0 mechanically, for any predictor,
+  with or without skill. Two controls settle it: a frozen whole-day model with only the scale
+  refitted reproduces A = 1.0319 / C = 1.3905 at L1's magnitude against the published
+  1.0319 / 1.3904, and holding the calibration rule constant REVERSES the claim for L4 (median
+  |slope-1| 0.018 -> 1.034 under A, against C's 0.269). The slope is now reported as the
+  spec-mandated diagnostic with an explicit do-not-read-this-as-leakage note, and nothing in the
+  study rests on it. The previous pass had flagged this asymmetry as newly introduced by its own
+  fix; it was promoted to a finding instead of controlled for, which is the specific failure.
+- 2026-08-03 — **The artifact floor now refits the scale per fold under the protocol's own
+  rule.** The old floor froze the scale along with the model, so it could not see the channel
+  above — a control that was vacuous by construction, published as a control. This is the same
+  class of error the 2026-08-02 pass killed the report over, one level down. Like-for-like
+  floors are 2-6x the published ones: R2 +0.0043 (L1 magnitude), +0.0112 (L3), +0.0192 (L4)
+  against +0.0020 / +0.0020 / +0.0153. The frozen-scale column is retained beside the corrected
+  one, because the pure partition artifact is a real and separate quantity and the difference
+  between the two columns IS the calibration channel.
+- 2026-08-03 — **`--holdout-control` added: protocol A re-run under C's positional holdout.**
+  Same split, folds, seed and model; only the calibration rule moves. This is the decomposition
+  that has to sit beside the headline, because roughly half of L4's R2 gap lives in this channel
+  rather than in the split. It is a legitimate part of what "shuffled k-fold" means — a
+  practitioner shuffling really does calibrate on exchangeable rows — but it is a different
+  mechanism from seeing the future and the report was not separating them.
+- 2026-08-03 — **AUC is now reported on the RAW score as well, and the raw column is the one
+  quoted.** The through-origin rescale is rank-preserving only UP TO SIGN, and the fitted scale
+  goes negative in 27 of 400 protocol-C folds and 0 of 400 protocol-A folds. A negative scale
+  sends AUC to 1-AUC. That channel alone manufactured the entire apparent A-C AUC gap on the
+  unfitted rungs: on the raw score L1m's and L2's gaps are NEGATIVE (-0.0018, -0.0002) where the
+  rescaled column reported +0.0035 and +0.0078. The capacity progression is now quoted on the
+  raw score, where L3 (+0.0409) and L4 (+0.1740) are essentially unchanged and the unfitted
+  rungs sit at zero — which is what the claim needed them to do and did not verify.
+- 2026-08-03 — **The claim "a rank statistic's artifact floor cannot scale" is withdrawn.** It
+  was the stated *reason* the AUC restatement was worth more than the R2 one, and it is wrong.
+  Protocol A's per-fold AUC is a whole-day POOLED AUC while C's is a WITHIN-BLOCK AUC; any
+  frozen score with a time-varying offset makes those estimands diverge with nothing refitted,
+  and the red team drove the floor to -0.137 that way. The AUC floor is small HERE because these
+  frozen predictors happen to be temporally homogeneous. Reported as a measurement on this data,
+  never as a property of the metric.
+- 2026-08-03 — The headline table's `floor` column is now matched to each rung's own magnitude
+  (L0/L1/L1m/L2 against L1's, L3 against L3's, L4 against L4's). The 2026-08-02 pass established
+  that one magnitude does not bound another and the prose was corrected then, but the GENERATED
+  column kept printing the L1 floor beside every rung for another day. Prose is not the artifact.
+- 2026-08-03 — **`edge.costs.run` now uses the causal calibration too.** It had kept the
+  in-sample rescale that was killed for the ladder on 2026-08-02 — found by the third red team,
+  outside its own scope. My first estimate of the impact was that the economics would be
+  invariant, on the grounds that with a 0-tick trading deadband the traded direction is
+  `sign(scale) * sign(raw)` and only the scale's sign can change a trade. **That was wrong, and
+  re-running it rather than reasoning about it is what showed so**: `scale_holdout` also changes
+  what the RAW MODEL is fitted on (80% of the training rows instead of 100%), so the fitted
+  rungs' predictions move. L4's INTC calendar 1s break-even goes 0.0080 → 0.0088 and L3's
+  0.0098 → 0.0100. A first version of this entry then claimed the unfitted rungs and controls
+  were unchanged to four decimals and offered that as the check that nothing else moved; the
+  fourth red team showed **18 of 72 unfitted rows moved**, because the causal scale can come
+  out negative and with a 0-tick deadband that inverts an unfitted rung's direction outright.
+  Every quoted cost number was updated from the regenerated report.
+- 2026-08-03 — The cost controls' `fit` now accepts and IGNORES `scale_holdout`. They override
+  `fit` deliberately — a control whose rescale can flip its sign is not a control — and that
+  override silently fell out of step with `Rung.fit` the moment the cost path started passing
+  the keyword, killing a full cost run with a `TypeError` that no test covered.
+  `tests/test_pnl.py::test_every_cost_predictor_accepts_the_harness_calling_convention` now
+  walks every predictor the cost runner builds and asserts both halves: the call must not raise,
+  and the controls' scale must still be exactly 1.0.
+- 2026-08-03 — **`.venv-edge` added and put first in the Makefile's interpreter probe.** The
+  `/opt/anaconda3` install this project was developed against disappeared from the machine
+  partway through the session — `make` would have found no candidate with `pyarrow` and every
+  target would have failed. A repo whose reproduction story is "one command" cannot depend on an
+  interpreter it does not control, so the venv is created from `/opt/homebrew/bin/python3` and
+  probed first; the older candidates stay in the list and simply fall through when absent. The
+  full suite passes on it unchanged (400 tests, 594 subtests) under Python 3.14 and numpy 2.5.1
+  against the 3.12/numpy-1.x it was written on, which is a free clean-room check of the
+  zero-dependency claim. `.venv-edge/` and the adversary's `scratch/` are gitignored.
+
+## Phase 2 after the 2026-08-03 fourth red team (`SURVIVED WITH CAVEATS`)
+
+- 2026-08-03 — **The artifact floor is now measured over four frozen-model fit windows and the
+  WORST one is what margins are quoted against.** Fitting the frozen model on the whole day
+  minimises the floor, and at L4's magnitude it does so mechanically: a whole-day GBM scores AUC
+  ~0.996, a ceiling where two protocols have almost no room to differ, while the rung it is meant
+  to bound scores ~0.72 under C. Refit on half the day and the raw-AUC floor goes from +0.0014 to
+  +0.0198 median and +0.0383 worst cell. **The "98x its floor" margin published earlier the same
+  day was that ceiling.** The real figure is ~7x median and 1.5x in the worst cell — still the
+  claim, an order of magnitude less impressive than stated. This is the third distinct way this
+  project's floor has been wrong, and the pattern each time is the same: a control that is not
+  exposed to everything the measured thing is exposed to.
+- 2026-08-03 — **`A' - C` is presented as a bracket, not a share.** The control changes the
+  calibration rule, but `Rung.fit` fits the model on the complement of the holdout, so it also
+  changes which rows the model trains on — `A'` is a temporally handicapped model, not the same
+  model. Standardising on the other rule instead (`C'`, give C protocol A's random holdout) puts
+  L4's gap at +0.5223 against `A'`'s +0.1379: each protocol's default rule is the one that
+  flatters it, and the published `A - C` sits mid-bracket rather than at the top. A third rule
+  (holdout = first 20% in time) returns essentially the whole uncontrolled gap on raw AUC
+  (+0.1727 of +0.1740), which says the AUC shrink under `A'` is a lost training window rather
+  than the rule. "48% of the gap is the rule" is withdrawn as a point estimate. The clean control
+  — hold the model's fit rows fixed, move only the scale rows, accept the overlap — is not
+  implemented and is logged in `FUTURE.md`.
+- 2026-08-03 — **`tests/test_floors.py` added: the floor had zero test coverage.** Six mutations
+  reverting the day's corrections — flipping `refit_scale`'s default, fitting the floor's scale
+  in-sample, giving every protocol A's holdout rule, collapsing `_floor_key` to L1, measuring one
+  magnitude, and `score_fold` ignoring `holdout_rule` — all passed a 400-test suite, including
+  two verbatim reversions of corrections earlier passes killed the report over. `frozen_floor`
+  now returns its per-fold `scales` and `frozen_raw` so the tests can re-derive them by exact
+  equality; an inequality-based test passes against the in-sample mutation because the two
+  numbers are numerically close. A seventh mutation (phase 3 reverted to the in-sample rescale)
+  is covered by a spy rung in `tests/test_pnl.py`.
+- 2026-08-03 — `make ladder`, `README.md` and `METHOD.md` now pass `--holdout-control`. Without
+  it the published command regenerated `reports/ladder.md` **without the control table the
+  headline numbers come from** — a documented reproduction that did not reproduce the artifact
+  (CLAUDE.md rule 7). The report header always echoed the flag correctly; the three places a
+  reader would copy from did not.
+- 2026-08-03 — The `AUC raw` column now carries its worst fold, like every other metric in the
+  project. It shipped for a day without one, which is a CLAUDE.md rule 4 miss on the single
+  column the report tells the reader to quote. It matters: L4's gap is positive in 79 of 80
+  protocol-C folds while L3's is positive in 55 of 80 and halves when fold 0 is dropped, and the
+  "16 / 16 cells" column both rungs share hides that difference entirely.
+- 2026-08-03 — Three stale phase-3 numbers in `FINDINGS.md` were replaced from the regenerated
+  `reports/costs.md`, and one conclusion weakened with them: the Diebold-Mariano comparison of L4
+  against L3 on INTC calendar 1s is **p = 0.087**, not the p = 0.016 quoted from a superseded
+  run, and the AMZN cell cited as a null now leans the other way at p = 0.088. The honest reading
+  is no significant difference in either direction. The break-even ordering the section actually
+  rests on is unaffected.

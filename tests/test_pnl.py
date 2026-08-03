@@ -347,3 +347,68 @@ class TestCostControls(unittest.TestCase):
         from edge.costs.run import _Oracle
 
         self.assertEqual(_Oracle("label_y_mid_5s").features, ("label_y_mid_5s",))
+
+    def test_simulate_calibrates_causally_like_the_ladder(self):
+        """Phase 3 kept the in-sample rescale for a day after the ladder dropped it.
+
+        The 2026-08-02 red team killed that calibration for the harness; `costs/run.py` went
+        on calling `rung.fit(X, y)` with no holdout until the third pass found it on
+        2026-08-03, and reverting it passes every other test in this suite. A spy rung records
+        what `simulate` actually passes, because the difference is invisible in the output for
+        most cells and worth ~40% of a break-even in a few.
+        """
+        from edge.costs.run import simulate
+        from edge.harness.splits import Fold
+
+        seen = {}
+
+        class SpyRung:
+            name, features = "spy", ("f",)
+            scale_ = 1.0
+
+            def fit(self, X, y, scale_holdout=None):
+                seen["holdout"] = scale_holdout
+                return self
+
+            def predict(self, X):
+                return np.ones(X.shape[0])
+
+        n = 400
+        ts = np.arange(n, dtype=np.int64) * 100_000_000
+        cols = {"f": np.ones(n)}
+        touch = {"ts_ns": ts,
+                 "bid_px_1": np.full(n, 100.0), "ask_px_1": np.full(n, 101.0)}
+        fold = Fold(fold_id=0, protocol="C",
+                    train_idx=np.arange(0, 300), test_idx=np.arange(300, n))
+        simulate(cols, touch, np.zeros(n), ts, 1_000_000_000, 1_000_000,
+                 SpyRung(), [fold], np.ones(n, dtype=bool))
+
+        self.assertIn("holdout", seen)
+        self.assertIsNotNone(seen["holdout"],
+                             "simulate fitted in-sample -- the calibration killed 2026-08-02")
+        hold = seen["holdout"]
+        self.assertTrue(hold[-1], "protocol C's holdout must be the training TAIL")
+        self.assertFalse(hold[0])
+        self.assertAlmostEqual(hold.mean(), 0.2, places=2)
+
+    def test_every_cost_predictor_accepts_the_harness_calling_convention(self):
+        """The controls override `fit`, so they can silently fall out of step with `Rung.fit`.
+
+        They did: when `simulate` moved to the causal calibration on 2026-08-03 it began
+        passing `scale_holdout=`, and both controls raised `TypeError` at runtime — a whole
+        cost run lost to a signature drift no unit test covered. Every predictor the cost
+        runner builds must accept the keyword, and the controls must still IGNORE it.
+        """
+        from edge.costs.run import build_controls
+        from edge.harness.models import build_ladder
+
+        y = np.full(100, -5.0)  # sign chosen to flip anything that actually calibrates
+        hold = np.zeros(100, dtype=bool)
+        hold[80:] = True
+
+        for rung in build_controls("label_y_mid_1s") + build_ladder(seed=0):
+            X = np.zeros((100, len(rung.features)))
+            with self.subTest(rung=rung.name):
+                rung.fit(X, y, scale_holdout=hold)  # must not raise
+                if rung.name.startswith("CTRL"):
+                    self.assertEqual(rung.scale_, 1.0)

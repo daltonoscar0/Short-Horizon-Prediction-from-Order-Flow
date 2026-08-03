@@ -35,7 +35,7 @@ from edge.costs.pnl import (
 from edge.costs.stats import block_bootstrap_ci, deflated_sharpe, diebold_mariano
 from edge.harness import N_FOLDS
 from edge.harness.models import Rung, build_ladder
-from edge.harness.run import HORIZON_NS, common_usable_mask
+from edge.harness.run import HORIZON_NS, common_usable_mask, scale_holdout_mask
 from edge.harness.splits import make_folds
 
 TICKERS = ("INTC", "AMZN")
@@ -104,8 +104,10 @@ class _ConstantDirection(Rung):
     def _raw(self, X):
         return np.full(X.shape[0], self.sign, dtype=np.float64)
 
-    def fit(self, X, y):
-        self.scale_ = 1.0  # a fitted rescale could flip the sign; a control must not move
+    def fit(self, X, y, scale_holdout=None):
+        # `scale_holdout` is accepted and IGNORED, deliberately. A fitted rescale could flip
+        # the sign, and a control that moves with the calibration is not a control.
+        self.scale_ = 1.0
         return self
 
 
@@ -127,8 +129,8 @@ class _Oracle(Rung):
     def _raw(self, X):
         return np.sign(X[:, 0])
 
-    def fit(self, X, y):
-        self.scale_ = 1.0
+    def fit(self, X, y, scale_holdout=None):
+        self.scale_ = 1.0  # accepted and ignored: an upper bound must not be rescaled either
         return self
 
 
@@ -174,7 +176,18 @@ def simulate(cols, touch, y, ts, horizon_ns, delta_ns, rung, folds, common_mask,
         te = fold.test_idx[common_mask[fold.test_idx]]
         if tr.size < 50 or te.size < 20:
             continue
-        rung.fit(X[tr], y[tr])
+        # The SAME causal calibration the ladder uses (2026-08-02). This path kept the
+        # in-sample rescale until 2026-08-03, when the third red team found it here. It is
+        # very nearly a no-op for the economics -- with a 0-tick trading deadband the traded
+        # direction is sign(scale) * sign(raw), so only the SIGN of the scale can change a
+        # trade, and an in-sample scale is negative only if a rung is anti-correlated with the
+        # label on its own training rows. Fixed anyway: "very nearly" is not a property to
+        # leave two calibrations apart over, and a negative fitted scale is not hypothetical --
+        # the causal scale goes negative in 27 of 400 protocol-C folds in the ladder.
+        hold = scale_holdout_mask(tr.size, fold.protocol, fold.fold_id)
+        if hold.all() or not hold.any():
+            continue
+        rung.fit(X[tr], y[tr], scale_holdout=hold)
         pred = rung.predict(X[te])
 
         direction = np.zeros(te.shape[0], dtype=np.float64)

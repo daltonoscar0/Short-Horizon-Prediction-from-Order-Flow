@@ -113,11 +113,25 @@ out-of-sample amplitude until R²-vs-zero goes sharply negative. That artifact p
 large negative protocol-C R² in the earlier ladder, and because it never bites under A, it
 inflated the measured optimism itself.
 
-**The artifact floor is measured.** A frozen predictor — fitted once on the whole day, scored
-unchanged under every protocol — still shows a nonzero A−C gap, because A's fold mean
-approximates the `Σy²`-weighted pooled metric while C's is an unweighted average over
-contiguous segments of very unequal `Σy²`. Every headline cell reports that floor beside its
-gap; a rung that does not clear its floor has measured nothing.
+**The artifact floor is measured, and it is measured like-for-like.** A frozen model — fitted
+once on the whole day, scored under every protocol with only the per-fold scale refitted, under
+that protocol's own holdout rule — still shows a nonzero A−C gap. Two mechanisms produce it.
+The first is fold aggregation: A's fold mean approximates the `Σy²`-weighted pooled metric while
+C's is an unweighted average over contiguous segments of very unequal `Σy²`. The second is the
+calibration rule itself, and it is the larger of the two — freezing the scale as well as the
+model gives floors of +0.0020/+0.0020/+0.0153 at L1/L3/L4 magnitudes against the like-for-like
++0.0043/+0.0112/+0.0192. Both columns ship; their difference *is* the calibration channel,
+measured on a predictor that cannot leak. Every headline cell reports the like-for-like floor at
+its own rung's magnitude, and a rung that does not clear it has measured nothing.
+
+**The calibration rule is a channel in `A − C`, and it is decomposed rather than absorbed.**
+Under A the scale's holdout is a random 20% of training rows, which is exchangeable with A's
+random test fold; under B/C/D it is the last 20% in time, which is not exchangeable with a later
+block. That is a legitimate part of what shuffling costs you, but it is a *different* mechanism
+from seeing the future. Re-running A under C's rule (`--holdout-control`) leaves L4's median gap
+at **+0.1379** of +0.3173 and takes L1's to **−0.0021**. Found on 2026-08-03 when a
+calibration-slope reading was published as a leakage signature and the red team showed a frozen
+model reproduces it.
 
 **Folds are cut on wall-clock time, not stamp index.** 32% of INTC event-clock stamps sit
 within 0.5 ms of the previous one and carry ~2.3× the correlation of isolated stamps; an index
@@ -175,7 +189,28 @@ carving a validation slice out of training is one more free parameter to log.
   computed alongside purely to show the size of the gap.
 - **Information coefficient** — Spearman ρ per fold, hand-written rank transform.
 - **Classification** — balanced accuracy and MCC, always printed next to the base rate. At 1s
-  ~96% of INTC labels are flat, so plain accuracy is meaningless.
+  ~96% of INTC labels are flat, so plain accuracy is meaningless. Read balanced accuracy and MCC
+  on the unfitted rungs as *null*: a rescaled sign predictor never clears the 0.5-tick deadband,
+  so its predicted class is always 0, balanced accuracy is exactly 1/3 and MCC is NaN.
+- **AUC on the directional subset** — up versus down on the rows the deadband calls
+  directional, flats excluded. Pooling the flats into the negative class would make AUC a
+  function of tie mass rather than of skill, which is the axis error the phase-1 red team caught
+  in the correlation table; under this definition 0.5 is chance in every cell. A one-sided test
+  block returns NaN, not 0.5, so an undefined cell cannot enter a mean as a chance-level row.
+  AUC ranks rather than thresholds, so it is the only classification metric carrying information
+  for the unfitted rungs, and it is the metric the capacity result is restated on
+  (`FINDINGS.md` §1.1a). **Quote the raw-score column.** The through-origin rescale is
+  rank-preserving only *up to sign*, the fitted scale goes negative in 27 of 400 protocol-C
+  folds and 0 of 400 protocol-A folds, and a negative scale sends AUC to 1−AUC — which is what
+  produced the unfitted rungs' apparent A−C gap in the first draft of that section.
+- **Calibration slope** — the slope of realized on predicted, per fold. `EVAL_PROTOCOL.md` §2
+  asks for it because R² and IC cannot separate a model that is directionally right but too
+  loud from one that is simply wrong. **Do not read its A-versus-C difference as leakage.**
+  Under A the scale's holdout is exchangeable with A's test fold, so the slope is driven to ≈1.0
+  mechanically for any predictor; a frozen model that cannot leak reproduces the published split
+  to three decimals. It is also unstable at the cell level (its denominator is the prediction's
+  variance, and L3 ranges [−4.74, 43.20]), and by median aggregation protocol C's slopes come
+  out near 1.0 too. Reported as the spec-mandated diagnostic; no claim rests on it.
 - **Never a pooled number alone.** Mean, median and **worst fold** travel together.
 
 ## 7. Costs, fills and the break-even number
@@ -217,7 +252,7 @@ stamps) for CIs on the **mean per trade** — an earlier draft printed that inte
 *total* PnL, off by a factor of `n_trades`. Diebold–Mariano between adjacent rungs on per-trade
 gross PnL, with loss `= −gross ticks` (squaring a PnL would test whether one rung's PnL is
 larger in *magnitude*, which is the wrong hypothesis) and a HAC lag equal to the block length.
-Deflated Sharpe on the **gross** series at n = 2,056 trials: on the net series every rung has a
+Deflated Sharpe on the **gross** series at n = 2,152 trials: on the net series every rung has a
 per-trade Sharpe near −7.6 and the DSR is 0.000 at every trial count from 1 to 10¹², which is a
 tautology rather than a finding.
 
@@ -260,9 +295,10 @@ make data       # raw LOBSTER CSVs -> validated event frame + data-quality repor
 make features   # -> data/features/*.parquet + the correlation table
 make selfcheck  # Cont-Kukanov-Stoikov reproduction; fails loudly if the relation breaks
 make test       # the full suite
-python3 -m edge.harness.run --seed 0 --embargo-sweep --in-sample-scale  # the optimism table
+python3 -m edge.harness.run --seed 0 --embargo-sweep --in-sample-scale \
+    --holdout-control                                                  # the optimism table
 python3 -m edge.harness.floors --seed 0                 # the artifact floor, per rung
-python3 -m edge.costs.run   --seed 0 --trials 2056 \
+python3 -m edge.costs.run   --seed 0 --trials 2152 \
     --tickers INTC,AMZN --clocks calendar,event --horizons 1s,5s   # break-even table
 ```
 
@@ -288,9 +324,11 @@ including NaN placement.
 - **The DM tests are indicative, not decisive.** Adjacent rungs are largely nested, where
   standard Diebold–Mariano is undersized; §2 of the protocol asks for the Giacomini–White
   variant, which is not implemented.
-- **The calibration slope and AUC are computed but not reported.** `EVAL_PROTOCOL.md` §2 asks
-  for the calibration slope; `calibration_slope` and `auc_binary` are implemented and
-  unit-tested but no report emits them. Logged in `FUTURE.md` rather than dropped.
+- **The calibration slope is reported but unstable per cell** (2026-08-03). Its denominator is
+  the prediction's variance, so a low-variance fold sends the slope to ±40; the medians are
+  meaningful, the individual cells often are not. AUC is reported on the directional subset
+  only, which is a choice: it makes 0.5 chance in every cell regardless of tie mass, at the
+  cost of saying nothing about a rung's ability to identify the flats.
 - **The trading deadband was set after seeing protocol-C output** (0 ticks, not the labels'
   0.5). The reasoning is a-priori but the trigger was an empty table; disclosed in the
   frozen-decisions table of `RESULTS.md` rather than presented as clean.

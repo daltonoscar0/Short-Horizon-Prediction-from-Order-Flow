@@ -53,14 +53,23 @@ These are known, recorded, and small — but they are places a silent regression
   covered, but roughly 35 `ofi_l{m}_{w}` level×window cells, 12 `label_*` columns at the
   2s/5s/10s horizons and 5 `st_*` columns are pinned only structurally. Five `st_*` columns
   survive replacement by zeros, which means no test currently depends on their values.
-- **Calibration slope is computed but not reported.** `harness/metrics.py::calibration_slope`
-  is implemented and unit-tested; `EVAL_PROTOCOL.md` sec. 2 asks for it ("slope of realized on
-  predicted, should be ≈1; if it's 0.2 your model is confidently wrong at scale"), and no
-  report emits it. Adding the column is a one-line change to the report writer plus a full
-  ladder re-run. It is worth doing: L3/L4's large negative R² under protocol C is exactly the
-  signature of a model that is confidently wrong at scale, and the calibration slope would
-  measure that directly instead of leaving it as an inference. `auc_binary` is in the same
-  position.
+- ~~**Calibration slope is computed but not reported.**~~ **Done 2026-08-03**, together with
+  AUC — and reporting them is what exposed the two errors described in `FINDINGS.md` §1.1a: the
+  artifact floor was frozen against the calibration channel, and about half of L4's flagship gap
+  is that channel rather than the split. Both are now measured. A first reading of the slope as a
+  leakage signature was published and withdrawn the same day; it is mechanically forced by the
+  protocol-dependent holdout rule.
+
+  What remains open here is narrower. **The slope is unstable per cell** (L3 ranges
+  [−4.74, 43.20] because its denominator is the prediction's variance), so only the medians are
+  quotable and a trimmed or variance-weighted aggregation would make the per-cell column
+  readable. And **the AUC floor is small on this data for reasons that will not transfer.**
+  Protocol A's per-fold AUC is a whole-day pooled AUC while C's is a within-block AUC, so any
+  frozen score with a time-varying offset drives the two apart with nothing refitted — the red
+  team reached −0.137 that way. Separately, the floor depends on where the frozen model is
+  fitted, and at L4's magnitude a whole-day fit sits at an AUC ceiling (~0.996) where two
+  protocols cannot differ; the floor is now maximised over four fit windows for that reason.
+  Both must be re-measured on any new data rather than assumed. See §7.
 - **Giacomini–White for nested rungs.** The DM tests between adjacent rungs are reported and
   flagged as indicative: adjacent rungs are largely nested (L3's feature set contains L2's) and
   standard DM is undersized there. The conditional GW variant is the correct test and is not
@@ -97,3 +106,22 @@ That combination means the honest ladder here is a statement about *prediction*,
 tradable strategy. A version of this project aimed at tradability would need passive fills,
 queue position, and a horizon chosen by where the signal actually lives — which is a different
 project, and should be labelled one.
+
+## 7. The calibration control this repo could not build
+
+`A' - C` changes the calibration holdout rule, but `Rung.fit` fits the raw model on the
+complement of that holdout, so it also changes which rows the model trains on. Every number
+attributing a share of `A - C` to "the calibration rule" is therefore confounded with a training
+window, and the honest statement is a bracket ([+0.138, +0.522] for L4 on R², [+0.137, +0.190]
+on raw AUC) rather than a share.
+
+**The clean control** fits the raw model on the *same* random 80% under both arms and moves only
+the rows the through-origin scale is fitted on, accepting that the scale rows then overlap the
+model's. It is one branch in `score_fold` and one more protocol column. It would collapse the
+bracket to a point and is the single cheapest unbuilt thing in this repo.
+
+Two smaller ones alongside it. The artifact floor is now measured over four frozen-model fit
+windows because "whole day" turned out to minimise it; **the set of windows is itself arbitrary**
+and a floor maximised over a proper search would be the defensible object. And the frozen model
+is a *frozen* model — the rungs refit theirs per fold, so the raw model's own refitting is a
+third channel no frozen predictor can bound. Nothing here measures it.
