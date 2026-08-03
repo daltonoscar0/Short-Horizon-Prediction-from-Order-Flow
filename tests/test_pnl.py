@@ -406,9 +406,18 @@ class TestCostControls(unittest.TestCase):
         hold = np.zeros(100, dtype=bool)
         hold[80:] = True
 
+        model_mask = np.ones(100, dtype=bool)
+        model_mask[::5] = False
+
         for rung in build_controls("label_y_mid_1s") + build_ladder(seed=0):
             X = np.zeros((100, len(rung.features)))
             with self.subTest(rung=rung.name):
                 rung.fit(X, y, scale_holdout=hold)  # must not raise
+                # Every keyword the harness can pass, not just the one it passed first. The
+                # `model_mask` argument was added on 2026-08-03 for the decoupled calibration
+                # control and immediately broke every `fit` override in this file and in
+                # tests/test_score_fold.py -- the same signature drift this test was written
+                # for a day earlier, repeated.
+                rung.fit(X, y, scale_holdout=hold, model_mask=model_mask)
                 if rung.name.startswith("CTRL"):
                     self.assertEqual(rung.scale_, 1.0)

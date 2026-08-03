@@ -40,7 +40,7 @@ class StubRung:
         self.scale_ = scale
         self.fitted_on = None
 
-    def fit(self, X, y, scale_holdout=None):
+    def fit(self, X, y, scale_holdout=None, model_mask=None):
         self.fitted_on = (X.shape[0], None if scale_holdout is None else int(scale_holdout.sum()))
 
     def _raw(self, X):

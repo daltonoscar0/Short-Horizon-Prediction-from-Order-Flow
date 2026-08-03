@@ -30,10 +30,11 @@ cells, with the same features, rows, folds and seed under every protocol:
 > it is roughly a third to a half of what was first published, and the inversion did not
 > survive at all. The superseded columns remain in `reports/ladder.md`.
 >
-> **And the `A − C` column bundles two mechanisms.** About half of L4's gap is the harness's own
-> protocol-dependent calibration rule rather than the split; held constant, it is **+0.1379**,
-> and L1's goes to **−0.0021**. §1.1a has the decomposition, and no claim below rests on the
-> un-decomposed column.
+> **The `A − C` column was suspected of bundling a second mechanism. It does not.** A first
+> control (`A′`) attributed about half of L4's gap to the harness's own calibration rule; a
+> clean control built afterwards showed that attribution was itself confounded — with the
+> model's fit rows held fixed the rule is worth **exactly zero** on raw AUC and ~4% of the gap
+> on R². §1.1a carries both controls and the correction.
 
 ### 1.1 The control that makes the table readable — and why L1 was not it
 
@@ -85,68 +86,71 @@ Under A that slice is *exchangeable with A's random test fold*; under walk-forwa
 Freezing the scale switched that channel off inside the control while leaving every measured
 rung exposed to it — a control that could not see the thing it was controlling for.
 
-Re-running protocol A under C's positional rule (`A′`) separates the two mechanisms — imperfectly,
-for a reason stated below:
+The first attempt to separate the two was to re-run protocol A under C's positional rule (`A′`).
+It is **superseded** — the numbers are kept because the correction that followed is only legible
+beside them:
 
-| rung | `A − C` | **`A′ − C`**, rule held constant | *floor* (like-for-like) |
+| rung | `A − C` | `A′ − C`, *rule "held constant"* | *floor* (like-for-like) |
 |---|---|---|---|
-| L1 `sign(queue imbalance)` | +0.0043 | **−0.0021** | *+0.0043* |
-| L3 ridge, full set | +0.0587 | **+0.0542** | *+0.0112* |
-| L4 GBM, full set | **+0.3173** | **+0.1379** | *+0.0192* |
+| L1 `sign(queue imbalance)` | +0.0043 | −0.0021 | *+0.0043* |
+| L3 ridge, full set | +0.0587 | +0.0542 | *+0.0112* |
+| L4 GBM, full set | **+0.3173** | +0.1379 | *+0.0192* |
 
-**`A′` is not a clean control, and the honest object is a bracket.** `Rung.fit` fits the model on
-the complement of the calibration holdout, so changing the rule also changes *which rows the
-model trains on* — under `A′` the GBM sees the first 80% of the day in time and never sees its
-tail. Standardising on the other rule instead (give C protocol A's random holdout, `C′`) points
-the opposite way. The 2×2 for L4:
+**`A′` is not a clean control, and it turned out to be measuring the wrong thing entirely.**
+`Rung.fit` fits the raw model on the *complement* of the calibration holdout, so changing the
+rule also changes which rows the model trains on — under `A′` the GBM sees the first 80% of the
+day in time and never sees its tail. `A′` is a temporally handicapped model, not the same model
+calibrated differently.
 
-| | C, own rule | C′, A's random rule |
-|---|---|---|
-| **A, own random rule** | +0.3173 *(published)* | **+0.5223** |
-| **A′, C's positional rule** | **+0.1379** *(published)* | +0.3865 |
+**The clean control** (`--holdout-control`, 2026-08-03) fixes that by fitting the raw model on
+the *same seeded random 80%* of each fold's training rows in every arm, and moving only the rows
+the scale is fitted on — accepting that the scale rows then overlap the model's. The overlap is
+identical in every arm, so a difference between arms is the calibration rule and nothing else.
 
-Each protocol's default rule is the one that flatters it, and `A − C` sits in the middle of a
-bracket of **[+0.138, +0.522]** for L4 and [+0.054, +0.183] for L3 — not at the top of it. A
-third rule (holdout = the *first* 20% in time, so the slice is contiguous like C's but the model
-keeps the day's tail) gives L4 +0.1255 on R² but **+0.1727 on raw AUC**, essentially the whole
-uncontrolled +0.1740. So on R² the shrink survives moving the slice and the attribution to the
-rule is broadly right; **on AUC it does not** — there the shrink under `A′` is the model's lost
-training window, not the calibration rule.
+On raw-score AUC it settles the question exactly, because raw AUC is a rank statistic on the raw
+model and therefore *cannot see the scale at all*. With the model held fixed, the calibration
+rule moves it by **0.000000 across all 96 rows** of the control table. That is an identity rather
+than a measurement — and it is the point:
 
-The clean control would hold the model's fit rows fixed and move only the scale rows, accepting
-the overlap. It is not implemented, and until it is, "48% of the gap is the rule" is one of at
-least three answers and the reported one is the smallest. What is *not* sensitive to any of this:
-**L4's raw-AUC gap lies in [+0.137, +0.190] across every rule tested**, and L1 never clears its
-floor under any of them.
+| rung | uncontrolled `A − C` | `A′ − C` (confounded) | **clean split-only** | cells positive |
+|---|---|---|---|---|
+| L1 `sign(queue imbalance)` | +0.0022 | +0.0023 | **+0.0023** | 13 / 16 |
+| L1m `sign(microprice − mid)` | −0.0018 | −0.0018 | **−0.0018** | — |
+| L2 OLS on OFI | −0.0002 | −0.0002 | **−0.0002** | — |
+| L3 ridge, full set | +0.0409 | +0.0283 | **+0.0409** | **16 / 16** |
+| L4 GBM, full set | +0.1740 | +0.1371 | **+0.1913** | **16 / 16** |
 
-Refitting the scale per fold under each protocol's own rule — the treatment the rungs actually
-get — also raises every floor: +0.0043 / +0.0112 / +0.0192 at L1/L3/L4 magnitudes, against the
-+0.0020 / +0.0020 / +0.0153 published earlier. Both columns ship, because the difference between
-them *is* the calibration channel measured on a predictor that cannot leak.
+**This reverses an attribution published earlier the same day.** `A′ − C` shrank L4's raw-AUC gap
+from +0.1740 to +0.1371 and that shrink was written up as the calibration rule's contribution. It
+cannot have been — with the model held fixed the rule is worth exactly nothing on this metric. All
+of it was the model's lost training window. The split-only gap is **+0.1913**, *larger* than the
+uncontrolled figure, positive in 16 of 16 cells, ranging +0.0657 to +0.3132.
 
-**The claim after both corrections is narrower and holds better.** Roughly half of the GBM's
-flagship gap was the calibration rule rather than the split. What is left, +0.1379, is still
-7.2× its own floor and still an order of magnitude above the ridge's absolute gap. And the
-parameter-free rung — whose gap was +0.0043 against a floor of +0.0043 — goes to **−0.0021**
-once the rule is held constant, which is the result a rung with nothing to fit should produce
-and which the first version of this table asserted rather than measured.
+So the bracket collapses, and it collapses toward the **top**: "about half of L4's gap is the
+calibration rule" is withdrawn. On R², where the metric does see amplitude, the rule is worth a
+median of **0.0116** for L4 — roughly 4% of its gap, not 48%. (L3's R² is genuinely
+rule-sensitive at 0.0784, which is why L3 is quoted on AUC below and not on R².)
 
-The calibration rule is not a bug. A practitioner who shuffles really does calibrate on
-exchangeable rows, so it is a legitimate part of what "shuffled k-fold" costs you. It is simply
-a *different mechanism* from seeing the future, and a decomposition that does not separate them
-is not a decomposition.
+One caveat that must travel with the R² columns of that control table, and it is a familiar one:
+**the overlap makes each arm's scale partly in-sample**, which is the calibration killed on
+2026-08-02, and it bites here exactly as it did then — under the walk-forward arms a
+high-capacity rung's amplitude is far too large and its R²-vs-zero goes sharply negative. The
+overlap is identical across arms so the *differences* are clean, but the absolute R² levels in
+that table are not comparable to the headline ladder and are not quoted anywhere. Raw AUC has no
+amplitude in it and is free of this, which is the third independent reason this project ended up
+quoting a rank metric.
 
 **On directional AUC**, which has no amplitude in it at all — up versus down on the rows the
 deadband calls directional, scored on the **raw** output:
 
-| rung | AUC under A | AUC under C | A − C | **A′ − C** (rule held constant) | cells positive | *floor* |
+| rung | AUC under A | AUC under C | A − C | **clean split-only** | cells positive | *floor* |
 |---|---|---|---|---|---|---|
 | L0 zero | 0.5000 | 0.5000 | 0.0000 | 0.0000 | 0 / 16 | — |
 | L1 `sign(queue imbalance)` | 0.6545 | 0.6573 | +0.0022 | +0.0023 | 13 / 16 | *+0.0031* |
 | L1m `sign(microprice − mid)` | 0.5880 | 0.5892 | **−0.0018** | −0.0018 | 6 / 16 | *+0.0031* |
 | L2 OLS on OFI | 0.6546 | 0.6567 | **−0.0002** | −0.0002 | 7 / 16 | *+0.0031* |
-| L3 ridge, full set | 0.7811 | **0.7319** | +0.0409 | **+0.0283** | **16 / 16** | *+0.0025* |
-| L4 GBM, full set | 0.9059 | 0.7122 | **+0.1740** | **+0.1371** | **16 / 16** | *+0.0014* |
+| L3 ridge, full set | 0.7811 | **0.7319** | +0.0409 | **+0.0409** | **16 / 16** | *+0.0025* |
+| L4 GBM, full set | 0.9059 | 0.7122 | **+0.1740** | **+0.1913** | **16 / 16** | *+0.0014* |
 
 **Raw, because the rescale is rank-preserving only up to sign.** The fitted scale comes out
 negative in 27 of 400 protocol-C folds and 0 of 400 protocol-A folds; a negative scale flips the
@@ -156,8 +160,8 @@ negative. The fitted rungs are untouched (L4 identical to four decimals), so the
 survives and the "smooth progression across all six rungs" reading does not.
 
 **What this table supports, stated as narrowly as it deserves.** The two controls compose — the
-raw score removes the rescale's sign, `A′ − C` removes the calibration rule — and both fitted
-rungs survive both, while all three unfitted rungs sit at zero to three decimals.
+raw score removes the rescale's sign, the decoupled arm removes the calibration rule — and both
+fitted rungs survive both, while all three unfitted rungs sit at zero to three decimals.
 
 But the margin must be quoted against the **worst** floor, not the published one. Every floor
 here fits the frozen model on the whole day, which is the choice that *minimises* it: at L4's
@@ -165,21 +169,19 @@ magnitude a whole-day GBM scores AUC ≈0.996, a **ceiling** where two protocols
 room to differ, against the ≈0.72 of the rung it is meant to bound. Refit the frozen model on
 half the day and the same floor grows several-fold, to +0.0383 in the worst cell.
 
-| rung | `A′ − C` raw AUC | worst-window floor | margin | folds positive |
+| rung | clean split-only raw AUC | worst-window floor | margin | cells positive |
 |---|---|---|---|---|
-| L3 ridge | +0.0283 | up to +0.0066 | median 18.5×, min cell 5.6× | 55 / 80 |
-| L4 GBM | +0.1371 | up to +0.0383 | median **6.9×**, min cell **1.5×** | **79 / 80** |
+| L3 ridge | +0.0409 | up to +0.0066 | median ~21×, min cell +0.0163 | 16 / 16 |
+| L4 GBM | +0.1913 | up to +0.0383 | median ~**10×**, min cell +0.0657 | **16 / 16** |
 
-**L4 survives at roughly 7×, not the 98× an earlier version of this section claimed** against a
-floor measured at that ceiling. That is capacity-scaling optimism, confirmed independently of
-the R² machinery, of the Σy²-weighting artifact, and of the calibration rule — and it is the
-version to quote. What it does **not** support: a five-point progression, and it supports L3 far
-more weakly than L4. Compared like with like — raw gap against a **raw** floor, at the rung's
-own magnitude, taking the worst floor over four fit windows — L3 clears in 16 of 16 cells but
-its gap is **a fold-0 story**: positive in only 55 of 80 protocol-C folds, with per-fold medians
-running +0.0815, +0.0551, +0.0069, −0.0174, −0.0032, and dropping fold 0 halves it (+0.0283 →
-+0.0131). L4's is positive in **79 of 80 folds** and barely moves when fold 0 goes (+0.0371 →
-+0.1273). The "16 / 16 cells" column is true for both and hides that difference.
+**L4 survives at roughly 10× its worst-case floor, not the 98× an earlier version of this
+section claimed** against a floor measured at that ceiling. That is capacity-scaling optimism,
+confirmed independently of the R² machinery, of the Σy²-weighting artifact, and of the
+calibration rule — and it is the version to quote. What it does **not** support: a five-point
+progression, and it supports L3 far more weakly than L4. On the confounded `A′` arm, L3's gap
+was positive in only 55 of 80 protocol-C folds and halved when fold 0 was dropped, while L4's
+was positive in 79 of 80 and barely moved. The "16 / 16 cells" column is true for both and hides
+that difference; the per-fold columns in `reports/ladder.md` are where it is visible.
 
 An earlier version of this caveat compared L3's *raw* gap against its *rescaled* floor and
 concluded it fell below the floor in 4 of 16 cells. That was the same metric-mismatch the

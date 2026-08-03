@@ -94,13 +94,21 @@ class Rung:
     def _fit_raw(self, X, y):
         pass
 
-    def fit(self, X, y, scale_holdout=None):
+    def fit(self, X, y, scale_holdout=None, model_mask=None):
         """Fit the raw score, then the through-origin rescale.
 
         `scale_holdout` is a boolean mask over the TRAINING rows. Where given, the raw model
         is fitted on `~scale_holdout` and the scale on `scale_holdout` — a strictly causal
         calibration. Where None, both are fitted on the same rows, which is the in-sample
         variant and is retained only as a diagnostic.
+
+        `model_mask` DECOUPLES the two row sets. Where given, the raw model is fitted on
+        `model_mask` and the scale on `scale_holdout`, and the two are allowed to OVERLAP.
+        That overlap makes the scale partly in-sample and is the accepted cost; what it buys
+        is that the calibration rule can be varied without also varying the model's training
+        window. Without it, `~scale_holdout` IS the model's training set, so the two channels
+        cannot be separated — which is why the `A' - C` control could only ever produce a
+        bracket (`FINDINGS.md` sec. 1.1a, 2026-08-03 fourth red team).
 
         WHY THIS EXISTS (2026-08-02 red team). The in-sample scale solves
         `sum(s*y)/sum(s*s)` against predictions that a high-capacity model has already fitted
@@ -120,7 +128,13 @@ class Rung:
         hold = np.asarray(scale_holdout, dtype=bool)
         if hold.all() or not hold.any():
             raise ValueError("scale_holdout must leave rows on both sides of the split")
-        self._fit_raw(X[~hold], y[~hold])
+        if model_mask is None:
+            fit_rows = ~hold
+        else:
+            fit_rows = np.asarray(model_mask, dtype=bool)
+            if not fit_rows.any():
+                raise ValueError("model_mask must select at least one row")
+        self._fit_raw(X[fit_rows], y[fit_rows])
         self.scale_ = _fit_scale(self._raw(X[hold]), y[hold])
         return self
 
@@ -137,7 +151,7 @@ class L0Zero(Rung):
     def _raw(self, X):
         return np.zeros(X.shape[0], dtype=np.float64)
 
-    def fit(self, X, y, scale_holdout=None):
+    def fit(self, X, y, scale_holdout=None, model_mask=None):
         self.scale_ = 0.0  # nothing to scale; keep the prediction identically zero
         return self
 

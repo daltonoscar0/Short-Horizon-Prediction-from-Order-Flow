@@ -35,23 +35,22 @@ Sharpe. The harness is the deliverable; the models are the detail.
 **Optimism scales with model capacity, and it is adjacency — not the future.** Median R² vs
 zero across 96 cells:
 
-| rung | A − C | **A′ − C** (calibration rule held constant) | *floor* | A − D (adjacency) | D − C (future) | C (honest) |
+| rung | A − C | *floor* | A − D (adjacency) | D − C (future) | C (honest) | **split-only, raw AUC** |
 |---|---|---|---|---|---|---|
-| L1 `sign(queue imbalance)` | +0.0043 | **−0.0021** | *+0.0043* | +0.0126 | −0.0085 | +0.0091 |
-| L3 ridge | +0.0587 | **+0.0542** | *+0.0112* | +0.0296 | +0.0231 | +0.0266 |
-| L4 GBM | **+0.3173** | **+0.1379** | *+0.0192* | **+0.2964** | +0.0067 | +0.0273 |
+| L1 `sign(queue imbalance)` | +0.0043 | *+0.0043* | +0.0126 | −0.0085 | +0.0091 | **+0.0023** (below floor) |
+| L3 ridge | +0.0587 | *+0.0112* | +0.0296 | +0.0231 | +0.0266 | **+0.0409** |
+| L4 GBM | **+0.3173** | *+0.0192* | **+0.2964** | +0.0067 | +0.0273 | **+0.1913** |
 
 1. **`A − C` has two channels and the control has to see both.** The floor is a frozen model
    scored under every protocol — but the harness also fits an output *scale* per fold, under a
    rule that differs by protocol (random 20% under A, last 20% under walk-forward), and A's is
    exchangeable with A's own test fold. Freeze the scale too and the control goes blind to the
-   larger channel; refit it and the floors go up 2–6×. Held constant, L4's gap halves to
-   **+0.1379** and L1's goes **negative** — a parameter-free rung with no optimism at all, which
-   is what it should show. Standardise on the other rule and L4 goes the other way to +0.5223,
-   so the honest object is a bracket **[+0.138, +0.522]** with the published number mid-range.
-   Restated on raw-score AUC, where there is no amplitude at all, the bracket is tight:
-   **[+0.137, +0.190]** for L4 against a worst-case floor of +0.0383, and L1 never clears its
-   floor under any rule.
+   larger channel; refit it and the floors go up 2–6×. Then a *clean* control — raw model fitted
+   on the same seeded random 80% in every arm, only the scale rows moving — shows the rule is
+   worth **exactly zero** on a rank metric, because a rank metric never sees the scale. The
+   split-only gap is **+0.1913** raw AUC for the GBM against a worst-case floor of +0.0383
+   (~10×), positive in 16 of 16 cells, and **+0.0023** for the parameter-free rung, which is
+   below its own floor — exactly what a rung with nothing to fit should show.
 2. **93% of the GBM's gap is temporal adjacency, not the future.** Protocol D hands the model
    the whole future in disjoint blocks and that buys it +0.007. Label overlap is the dominant
    mechanism — and it is invisible in `B − C`, which can only touch ~1% of an expanding
@@ -77,8 +76,8 @@ is what the harness was built to make possible.
 
 ## What I'd want you to poke at
 
-- Eight red-team passes are in `reports/adversary/`, run read-only with fresh context, and
-  **two of them killed a headline this project had already written down**. The phase-3 pass
+- Nine red-team passes are in `reports/adversary/`, run read-only with fresh context, and
+  **three of them killed a headline this project had already written down**. The phase-3 pass
   showed the original break-even column was model-invariant — a constant always-long predictor
   scored *inside* the ladder's range on it. The phase-2 passes showed that an in-sample
   calibration, not leakage, produced every large negative protocol-C R² in the first draft;
@@ -87,11 +86,15 @@ is what the harness was built to make possible.
 - **The floor was wrong twice, and both times a red team found it, not me.** The second phase-2
   pass killed the first version of the fix — the floor was measured only at L1's magnitude,
   which does not bound L4's. The third killed the second: it froze the calibration scale as well
-  as the model, so it could not see the channel that turned out to carry half the headline gap.
+  as the model, so it could not see the calibration channel at all. Its replacement was wrong
+  too: it changed the calibration rule but, because the model is fitted on the complement of the
+  calibration holdout, it also changed the model's training window — so its "half the gap is the
+  rule" finding was itself confounded, and the clean control shows the rule is worth **zero**.
   A control that is not exposed to everything the measured thing is exposed to is not a control,
-  and that is the most portable lesson in this repo.
+  and a control that moves something other than the one thing it names is not one either. That
+  is the most portable lesson in this repo.
 - Every configuration tried is in the trial log, including the two discarded harness
-  configurations that invalidated their own runs. The deflated Sharpe uses n = 2,152, which
+  configurations that invalidated their own runs. The deflated Sharpe uses n = 2,536, which
   deliberately over-counts, including superseded runs.
 - `DECISIONS.md` records what was chosen without asking and why — including that the phase-3
   trading deadband was set *after* seeing protocol-C output, which is disclosed rather than

@@ -289,6 +289,220 @@ Why it must be disclosed beside the headline: under A the random holdout is EXCH
 | AMZN | event | 10s | L3 ridge, full set | 0.08317 | 0.06251 | 0.00602 | 0.07715 | **0.05649** | 0.268 | 0.0495 | **0.0405** |
 | AMZN | event | 10s | L4 GBM, full set | 0.33055 | 0.19457 | 0.04603 | 0.28452 | **0.14853** | 0.478 | 0.1499 | **0.1259** |
 
+## The CLEAN calibration control: model rows fixed, only the scale rows move
+
+Every arm below fits the raw model on the **same seeded random 80%** of each fold's training rows -- the same rule under every protocol and every calibration slice -- and fits the through-origin scale on the slice named in the column. The scale rows therefore OVERLAP the model rows; that is the accepted cost, it is identical in every arm, and in exchange the calibration rule can be varied without also varying the model's training window.
+
+Why this exists: `A' - C` above cannot separate the two. `Rung.fit` fits the model on the COMPLEMENT of the calibration holdout, so switching A to the positional rule also takes away the day's tail. The 2x2 gave two rule-matched answers that disagreed by a factor of ~4, which is why the earlier headline was a bracket. Here the row difference is the rule and nothing else.
+
+`A_rand - C_pos` is the fully uncontrolled comparison reproduced inside this arm (each protocol on its own rule). `A_pos - C_pos` and `A_rand - C_rand` are the two rule-matched comparisons; **their spread is what the calibration rule is worth**, and it is now a clean measurement rather than a bracket over a confound.
+
+> **READ THE DIFFERENCES, NOT THE LEVELS.** The overlap makes each arm's scale partly IN-SAMPLE, which is the calibration that was killed on 2026-08-02 -- and it bites here exactly as it did then: under the walk-forward arms a high-capacity rung's amplitude is far too large and its R2-vs-zero goes sharply negative. The overlap is identical in every arm, so a DIFFERENCE between arms is still clean, but the absolute R2 levels in this table are not comparable to the headline ladder and must not be quoted beside it. The raw-AUC table below has no amplitude in it and is free of this.
+
+| ticker | clock | h | rung | A_rand | A_pos | C_rand | C_pos | A_rand-C_pos | **A_pos-C_pos** | **A_rand-C_rand** | rule spread |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| INTC | calendar | 1s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| INTC | calendar | 1s | L1 sign(queue imbalance) | 0.01240 | 0.01055 | 0.01052 | 0.00938 | 0.00302 | **0.00117** | **0.00188** | 0.00070 |
+| INTC | calendar | 1s | L1m sign(microprice - mid) | 0.00504 | 0.00464 | 0.00265 | 0.00402 | 0.00102 | **0.00062** | **0.00239** | 0.00177 |
+| INTC | calendar | 1s | L2 OLS on OFI | 0.00202 | 0.00206 | 0.00026 | 0.00042 | 0.00160 | **0.00163** | **0.00176** | 0.00013 |
+| INTC | calendar | 1s | L3 ridge, full set | 0.03830 | 0.03686 | -0.00114 | 0.01054 | 0.02776 | **0.02632** | **0.03944** | 0.01313 |
+| INTC | calendar | 1s | L4 GBM, full set | 0.18378 | 0.18467 | -0.24818 | -0.25953 | 0.44331 | **0.44420** | **0.43195** | 0.01224 |
+| INTC | calendar | 2s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| INTC | calendar | 2s | L1 sign(queue imbalance) | 0.01880 | 0.01541 | 0.01527 | 0.01277 | 0.00602 | **0.00263** | **0.00353** | 0.00089 |
+| INTC | calendar | 2s | L1m sign(microprice - mid) | 0.00799 | 0.00694 | 0.00426 | 0.00551 | 0.00249 | **0.00144** | **0.00373** | 0.00229 |
+| INTC | calendar | 2s | L2 OLS on OFI | 0.00376 | 0.00375 | 0.00116 | 0.00050 | 0.00326 | **0.00325** | **0.00260** | 0.00065 |
+| INTC | calendar | 2s | L3 ridge, full set | 0.05522 | 0.05162 | 0.00828 | 0.02507 | 0.03015 | **0.02655** | **0.04694** | 0.02039 |
+| INTC | calendar | 2s | L4 GBM, full set | 0.26211 | 0.26250 | -0.31909 | -0.36066 | 0.62277 | **0.62315** | **0.58120** | 0.04195 |
+| INTC | calendar | 5s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| INTC | calendar | 5s | L1 sign(queue imbalance) | 0.02910 | 0.02368 | 0.02435 | 0.02094 | 0.00816 | **0.00274** | **0.00475** | 0.00201 |
+| INTC | calendar | 5s | L1m sign(microprice - mid) | 0.01185 | 0.01098 | 0.00589 | 0.00465 | 0.00720 | **0.00633** | **0.00597** | 0.00036 |
+| INTC | calendar | 5s | L2 OLS on OFI | 0.00505 | 0.00503 | 0.00042 | -0.00016 | 0.00521 | **0.00519** | **0.00463** | 0.00056 |
+| INTC | calendar | 5s | L3 ridge, full set | 0.07426 | 0.06700 | 0.01016 | 0.03164 | 0.04262 | **0.03536** | **0.06410** | 0.02874 |
+| INTC | calendar | 5s | L4 GBM, full set | 0.38775 | 0.38767 | -0.43122 | -0.47378 | 0.86152 | **0.86145** | **0.81896** | 0.04248 |
+| INTC | calendar | 10s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| INTC | calendar | 10s | L1 sign(queue imbalance) | 0.03422 | 0.02677 | 0.03142 | 0.02886 | 0.00536 | **-0.00209** | **0.00280** | 0.00489 |
+| INTC | calendar | 10s | L1m sign(microprice - mid) | 0.01697 | 0.01627 | 0.01157 | 0.00886 | 0.00811 | **0.00741** | **0.00540** | 0.00201 |
+| INTC | calendar | 10s | L2 OLS on OFI | 0.00513 | 0.00519 | -0.00158 | -0.01003 | 0.01515 | **0.01522** | **0.00671** | 0.00851 |
+| INTC | calendar | 10s | L3 ridge, full set | 0.08082 | 0.07103 | -0.03860 | 0.00323 | 0.07759 | **0.06780** | **0.11942** | 0.05163 |
+| INTC | calendar | 10s | L4 GBM, full set | 0.51066 | 0.50886 | -0.55626 | -0.55983 | 1.07049 | **1.06869** | **1.06692** | 0.00177 |
+| INTC | event | 1s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| INTC | event | 1s | L1 sign(queue imbalance) | 0.08527 | 0.07087 | 0.07400 | 0.06712 | 0.01815 | **0.00375** | **0.01127** | 0.00752 |
+| INTC | event | 1s | L1m sign(microprice - mid) | 0.02504 | 0.02571 | 0.01518 | 0.00483 | 0.02021 | **0.02088** | **0.00986** | 0.01103 |
+| INTC | event | 1s | L2 OLS on OFI | 0.05378 | 0.05329 | 0.03140 | 0.03534 | 0.01844 | **0.01794** | **0.02238** | 0.00444 |
+| INTC | event | 1s | L3 ridge, full set | 0.24530 | 0.24488 | 0.09726 | 0.10821 | 0.13709 | **0.13667** | **0.14804** | 0.01138 |
+| INTC | event | 1s | L4 GBM, full set | 0.59914 | 0.59935 | 0.10553 | 0.10955 | 0.48958 | **0.48980** | **0.49361** | 0.00381 |
+| INTC | event | 2s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| INTC | event | 2s | L1 sign(queue imbalance) | 0.07639 | 0.05652 | 0.06652 | 0.06140 | 0.01499 | **-0.00489** | **0.00987** | 0.01476 |
+| INTC | event | 2s | L1m sign(microprice - mid) | 0.03291 | 0.03279 | 0.02052 | 0.00838 | 0.02453 | **0.02441** | **0.01239** | 0.01202 |
+| INTC | event | 2s | L2 OLS on OFI | 0.05718 | 0.05849 | 0.00865 | -0.00131 | 0.05849 | **0.05980** | **0.04853** | 0.01127 |
+| INTC | event | 2s | L3 ridge, full set | 0.22390 | 0.22551 | -0.01865 | 0.06964 | 0.15427 | **0.15587** | **0.24255** | 0.08668 |
+| INTC | event | 2s | L4 GBM, full set | 0.57935 | 0.57975 | 0.01745 | 0.02269 | 0.55666 | **0.55706** | **0.56190** | 0.00484 |
+| INTC | event | 5s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| INTC | event | 5s | L1 sign(queue imbalance) | 0.06245 | 0.04531 | 0.05463 | 0.05564 | 0.00681 | **-0.01032** | **0.00782** | 0.01814 |
+| INTC | event | 5s | L1m sign(microprice - mid) | 0.02575 | 0.02607 | 0.01569 | 0.00650 | 0.01925 | **0.01957** | **0.01006** | 0.00951 |
+| INTC | event | 5s | L2 OLS on OFI | 0.04711 | 0.04286 | -0.00135 | 0.01903 | 0.02809 | **0.02383** | **0.04847** | 0.02463 |
+| INTC | event | 5s | L3 ridge, full set | 0.19568 | 0.19492 | 0.07313 | 0.11724 | 0.07844 | **0.07767** | **0.12255** | 0.04488 |
+| INTC | event | 5s | L4 GBM, full set | 0.57932 | 0.57935 | -0.07248 | -0.06152 | 0.64083 | **0.64086** | **0.65179** | 0.01093 |
+| INTC | event | 10s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| INTC | event | 10s | L1 sign(queue imbalance) | 0.04140 | 0.02512 | 0.04016 | 0.03708 | 0.00432 | **-0.01196** | **0.00124** | 0.01320 |
+| INTC | event | 10s | L1m sign(microprice - mid) | 0.03614 | 0.03592 | 0.03494 | 0.02851 | 0.00763 | **0.00741** | **0.00120** | 0.00621 |
+| INTC | event | 10s | L2 OLS on OFI | 0.02897 | 0.02833 | 0.00857 | 0.00346 | 0.02551 | **0.02487** | **0.02040** | 0.00447 |
+| INTC | event | 10s | L3 ridge, full set | 0.14430 | 0.14261 | -0.03523 | -0.02705 | 0.17135 | **0.16966** | **0.17953** | 0.00987 |
+| INTC | event | 10s | L4 GBM, full set | 0.56647 | 0.56657 | -0.14938 | -0.14339 | 0.70986 | **0.70996** | **0.71585** | 0.00588 |
+| AMZN | calendar | 1s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| AMZN | calendar | 1s | L1 sign(queue imbalance) | 0.00328 | 0.00049 | 0.00276 | 0.00111 | 0.00218 | **-0.00061** | **0.00052** | 0.00114 |
+| AMZN | calendar | 1s | L1m sign(microprice - mid) | 0.00224 | 0.00008 | 0.00168 | -0.00008 | 0.00233 | **0.00016** | **0.00057** | 0.00041 |
+| AMZN | calendar | 1s | L2 OLS on OFI | 0.00260 | 0.00224 | 0.00133 | -0.00102 | 0.00362 | **0.00326** | **0.00127** | 0.00199 |
+| AMZN | calendar | 1s | L3 ridge, full set | 0.02170 | 0.01985 | -0.09952 | 0.00337 | 0.01832 | **0.01647** | **0.12122** | 0.10475 |
+| AMZN | calendar | 1s | L4 GBM, full set | 0.15052 | 0.15524 | -0.20403 | -0.19009 | 0.34061 | **0.34533** | **0.35456** | 0.00923 |
+| AMZN | calendar | 2s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| AMZN | calendar | 2s | L1 sign(queue imbalance) | 0.00460 | -0.00148 | 0.00383 | 0.00231 | 0.00229 | **-0.00379** | **0.00077** | 0.00456 |
+| AMZN | calendar | 2s | L1m sign(microprice - mid) | 0.00321 | -0.00206 | 0.00158 | 0.00071 | 0.00249 | **-0.00277** | **0.00162** | 0.00439 |
+| AMZN | calendar | 2s | L2 OLS on OFI | 0.00269 | 0.00260 | 0.00229 | -0.00171 | 0.00440 | **0.00431** | **0.00040** | 0.00391 |
+| AMZN | calendar | 2s | L3 ridge, full set | 0.02425 | 0.02220 | -0.15604 | -0.00329 | 0.02755 | **0.02549** | **0.18029** | 0.15480 |
+| AMZN | calendar | 2s | L4 GBM, full set | 0.22603 | 0.22802 | -0.24116 | -0.23388 | 0.45992 | **0.46190** | **0.46719** | 0.00529 |
+| AMZN | calendar | 5s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| AMZN | calendar | 5s | L1 sign(queue imbalance) | 0.00357 | -0.00232 | 0.00139 | -0.00009 | 0.00366 | **-0.00223** | **0.00218** | 0.00441 |
+| AMZN | calendar | 5s | L1m sign(microprice - mid) | 0.00206 | -0.00357 | 0.00014 | -0.00403 | 0.00609 | **0.00046** | **0.00192** | 0.00145 |
+| AMZN | calendar | 5s | L2 OLS on OFI | 0.00133 | 0.00196 | -0.00398 | -0.00806 | 0.00940 | **0.01002** | **0.00531** | 0.00471 |
+| AMZN | calendar | 5s | L3 ridge, full set | 0.02138 | 0.02108 | -0.30192 | -0.08318 | 0.10456 | **0.10426** | **0.32330** | 0.21904 |
+| AMZN | calendar | 5s | L4 GBM, full set | 0.35476 | 0.35342 | -0.27239 | -0.28802 | 0.64278 | **0.64144** | **0.62715** | 0.01429 |
+| AMZN | calendar | 10s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| AMZN | calendar | 10s | L1 sign(queue imbalance) | 0.00235 | 0.00032 | 0.00034 | -0.00190 | 0.00425 | **0.00222** | **0.00201** | 0.00021 |
+| AMZN | calendar | 10s | L1m sign(microprice - mid) | 0.00121 | 0.00037 | 0.00072 | -0.00367 | 0.00488 | **0.00404** | **0.00049** | 0.00356 |
+| AMZN | calendar | 10s | L2 OLS on OFI | 0.00228 | 0.00239 | -0.00637 | -0.02135 | 0.02363 | **0.02374** | **0.00865** | 0.01509 |
+| AMZN | calendar | 10s | L3 ridge, full set | 0.01950 | 0.01897 | -0.39486 | -0.16298 | 0.18248 | **0.18195** | **0.41437** | 0.23242 |
+| AMZN | calendar | 10s | L4 GBM, full set | 0.44270 | 0.43760 | -0.37016 | -0.37730 | 0.82000 | **0.81490** | **0.81286** | 0.00204 |
+| AMZN | event | 1s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| AMZN | event | 1s | L1 sign(queue imbalance) | 0.01222 | 0.00525 | 0.01104 | 0.00890 | 0.00333 | **-0.00364** | **0.00118** | 0.00483 |
+| AMZN | event | 1s | L1m sign(microprice - mid) | 0.00729 | 0.00297 | 0.00721 | 0.00435 | 0.00294 | **-0.00137** | **0.00008** | 0.00146 |
+| AMZN | event | 1s | L2 OLS on OFI | 0.01868 | 0.02051 | -0.11287 | -0.05399 | 0.07267 | **0.07450** | **0.13155** | 0.05705 |
+| AMZN | event | 1s | L3 ridge, full set | 0.15713 | 0.14701 | -0.21281 | -0.00682 | 0.16395 | **0.15383** | **0.36994** | 0.21610 |
+| AMZN | event | 1s | L4 GBM, full set | 0.29861 | 0.28840 | 0.05408 | 0.10004 | 0.19856 | **0.18836** | **0.24452** | 0.05616 |
+| AMZN | event | 2s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| AMZN | event | 2s | L1 sign(queue imbalance) | 0.01198 | 0.00172 | 0.01009 | 0.00829 | 0.00369 | **-0.00657** | **0.00189** | 0.00847 |
+| AMZN | event | 2s | L1m sign(microprice - mid) | 0.00783 | -0.00083 | 0.00669 | 0.00327 | 0.00456 | **-0.00410** | **0.00114** | 0.00524 |
+| AMZN | event | 2s | L2 OLS on OFI | 0.01834 | 0.01891 | -0.17006 | -0.06612 | 0.08445 | **0.08503** | **0.18839** | 0.10337 |
+| AMZN | event | 2s | L3 ridge, full set | 0.14385 | 0.14119 | -0.21487 | -0.01227 | 0.15612 | **0.15346** | **0.35871** | 0.20525 |
+| AMZN | event | 2s | L4 GBM, full set | 0.29397 | 0.29324 | 0.00323 | 0.03619 | 0.25777 | **0.25705** | **0.29074** | 0.03369 |
+| AMZN | event | 5s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| AMZN | event | 5s | L1 sign(queue imbalance) | 0.01076 | 0.00338 | 0.00824 | 0.00543 | 0.00533 | **-0.00205** | **0.00251** | 0.00456 |
+| AMZN | event | 5s | L1m sign(microprice - mid) | 0.00573 | -0.00112 | 0.00350 | -0.00121 | 0.00694 | **0.00009** | **0.00223** | 0.00214 |
+| AMZN | event | 5s | L2 OLS on OFI | 0.01292 | 0.01381 | -0.29203 | -0.05906 | 0.07199 | **0.07287** | **0.30496** | 0.23209 |
+| AMZN | event | 5s | L3 ridge, full set | 0.11776 | 0.11843 | -0.23215 | -0.05231 | 0.17008 | **0.17074** | **0.34991** | 0.17917 |
+| AMZN | event | 5s | L4 GBM, full set | 0.30801 | 0.30806 | -0.01453 | 0.01385 | 0.29416 | **0.29421** | **0.32254** | 0.02833 |
+| AMZN | event | 10s | L0 zero | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | **0.00000** | **0.00000** | 0.00000 |
+| AMZN | event | 10s | L1 sign(queue imbalance) | 0.00902 | 0.00596 | 0.00400 | 0.00522 | 0.00380 | **0.00074** | **0.00501** | 0.00428 |
+| AMZN | event | 10s | L1m sign(microprice - mid) | 0.00478 | 0.00139 | 0.00284 | -0.00078 | 0.00555 | **0.00216** | **0.00194** | 0.00022 |
+| AMZN | event | 10s | L2 OLS on OFI | 0.00433 | 0.00937 | -0.09221 | -0.10445 | 0.10878 | **0.11382** | **0.09654** | 0.01729 |
+| AMZN | event | 10s | L3 ridge, full set | 0.08399 | 0.07423 | -0.25461 | -0.19419 | 0.27818 | **0.26842** | **0.33861** | 0.07019 |
+| AMZN | event | 10s | L4 GBM, full set | 0.31922 | 0.32155 | -0.07026 | -0.04849 | 0.36772 | **0.37005** | **0.38948** | 0.01943 |
+
+### The same control on raw-score AUC -- where the rule spread is ZERO BY CONSTRUCTION, and that is the finding
+
+Raw AUC is a rank statistic on the raw model, so it never sees the scale at all. Once the model's fit rows no longer move with the calibration rule, the rule CANNOT move raw AUC, and the `rule spread` column below is identically 0.0000. That is an identity, not a measurement, and it is reported as one.
+
+**What it settles.** The published `A' - C` shrank L4's raw-AUC gap from +0.1740 to +0.1371 and that shrink was attributed to the calibration rule. It cannot have been: with the model held fixed the rule is worth exactly nothing on this metric. The whole of that shrink was the model's LOST TRAINING WINDOW -- under the positional rule the model is fitted on the first 80% of the day and never sees its tail. The `A_rand - C_pos` column here is the split effect measured with a rule-independent model, and it is the number to quote.
+
+| ticker | clock | h | rung | A_rand-C_pos | **A_pos-C_pos** | **A_rand-C_rand** | rule spread |
+|---|---|---|---|---|---|---|---|
+| INTC | calendar | 1s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| INTC | calendar | 1s | L1 sign(queue imbalance) | 0.0026 | **0.0026** | **0.0026** | 0.0000 |
+| INTC | calendar | 1s | L1m sign(microprice - mid) | -0.0038 | **-0.0038** | **-0.0038** | 0.0000 |
+| INTC | calendar | 1s | L2 OLS on OFI | -0.0055 | **-0.0055** | **-0.0055** | 0.0000 |
+| INTC | calendar | 1s | L3 ridge, full set | 0.0168 | **0.0168** | **0.0168** | 0.0000 |
+| INTC | calendar | 1s | L4 GBM, full set | 0.1847 | **0.1847** | **0.1847** | 0.0000 |
+| INTC | calendar | 2s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| INTC | calendar | 2s | L1 sign(queue imbalance) | 0.0023 | **0.0023** | **0.0023** | 0.0000 |
+| INTC | calendar | 2s | L1m sign(microprice - mid) | -0.0032 | **-0.0032** | **-0.0032** | 0.0000 |
+| INTC | calendar | 2s | L2 OLS on OFI | -0.0028 | **-0.0028** | **-0.0028** | 0.0000 |
+| INTC | calendar | 2s | L3 ridge, full set | 0.0226 | **0.0226** | **0.0226** | 0.0000 |
+| INTC | calendar | 2s | L4 GBM, full set | 0.2222 | **0.2222** | **0.2222** | 0.0000 |
+| INTC | calendar | 5s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| INTC | calendar | 5s | L1 sign(queue imbalance) | 0.0012 | **0.0012** | **0.0012** | 0.0000 |
+| INTC | calendar | 5s | L1m sign(microprice - mid) | -0.0046 | **-0.0046** | **-0.0046** | 0.0000 |
+| INTC | calendar | 5s | L2 OLS on OFI | 0.0015 | **0.0015** | **0.0015** | 0.0000 |
+| INTC | calendar | 5s | L3 ridge, full set | 0.0350 | **0.0350** | **0.0350** | 0.0000 |
+| INTC | calendar | 5s | L4 GBM, full set | 0.2657 | **0.2657** | **0.2657** | 0.0000 |
+| INTC | calendar | 10s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| INTC | calendar | 10s | L1 sign(queue imbalance) | 0.0022 | **0.0022** | **0.0022** | 0.0000 |
+| INTC | calendar | 10s | L1m sign(microprice - mid) | -0.0056 | **-0.0056** | **-0.0056** | 0.0000 |
+| INTC | calendar | 10s | L2 OLS on OFI | 0.0003 | **0.0003** | **0.0003** | 0.0000 |
+| INTC | calendar | 10s | L3 ridge, full set | 0.0433 | **0.0433** | **0.0433** | 0.0000 |
+| INTC | calendar | 10s | L4 GBM, full set | 0.3132 | **0.3132** | **0.3132** | 0.0000 |
+| INTC | event | 1s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| INTC | event | 1s | L1 sign(queue imbalance) | 0.0014 | **0.0014** | **0.0014** | 0.0000 |
+| INTC | event | 1s | L1m sign(microprice - mid) | -0.0085 | **-0.0085** | **-0.0085** | 0.0000 |
+| INTC | event | 1s | L2 OLS on OFI | -0.0246 | **-0.0246** | **-0.0246** | 0.0000 |
+| INTC | event | 1s | L3 ridge, full set | 0.0470 | **0.0470** | **0.0470** | 0.0000 |
+| INTC | event | 1s | L4 GBM, full set | 0.0678 | **0.0678** | **0.0678** | 0.0000 |
+| INTC | event | 2s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| INTC | event | 2s | L1 sign(queue imbalance) | -0.0064 | **-0.0064** | **-0.0064** | 0.0000 |
+| INTC | event | 2s | L1m sign(microprice - mid) | -0.0073 | **-0.0073** | **-0.0073** | 0.0000 |
+| INTC | event | 2s | L2 OLS on OFI | -0.0054 | **-0.0054** | **-0.0054** | 0.0000 |
+| INTC | event | 2s | L3 ridge, full set | 0.0575 | **0.0575** | **0.0575** | 0.0000 |
+| INTC | event | 2s | L4 GBM, full set | 0.1101 | **0.1101** | **0.1101** | 0.0000 |
+| INTC | event | 5s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| INTC | event | 5s | L1 sign(queue imbalance) | -0.0125 | **-0.0125** | **-0.0125** | 0.0000 |
+| INTC | event | 5s | L1m sign(microprice - mid) | -0.0051 | **-0.0051** | **-0.0051** | 0.0000 |
+| INTC | event | 5s | L2 OLS on OFI | -0.0115 | **-0.0115** | **-0.0115** | 0.0000 |
+| INTC | event | 5s | L3 ridge, full set | 0.0483 | **0.0483** | **0.0483** | 0.0000 |
+| INTC | event | 5s | L4 GBM, full set | 0.1861 | **0.1861** | **0.1861** | 0.0000 |
+| INTC | event | 10s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| INTC | event | 10s | L1 sign(queue imbalance) | -0.0091 | **-0.0091** | **-0.0091** | 0.0000 |
+| INTC | event | 10s | L1m sign(microprice - mid) | -0.0073 | **-0.0073** | **-0.0073** | 0.0000 |
+| INTC | event | 10s | L2 OLS on OFI | -0.0183 | **-0.0183** | **-0.0183** | 0.0000 |
+| INTC | event | 10s | L3 ridge, full set | 0.0718 | **0.0718** | **0.0718** | 0.0000 |
+| INTC | event | 10s | L4 GBM, full set | 0.2730 | **0.2730** | **0.2730** | 0.0000 |
+| AMZN | calendar | 1s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| AMZN | calendar | 1s | L1 sign(queue imbalance) | 0.0042 | **0.0042** | **0.0042** | 0.0000 |
+| AMZN | calendar | 1s | L1m sign(microprice - mid) | 0.0027 | **0.0027** | **0.0027** | 0.0000 |
+| AMZN | calendar | 1s | L2 OLS on OFI | 0.0010 | **0.0010** | **0.0010** | 0.0000 |
+| AMZN | calendar | 1s | L3 ridge, full set | 0.0216 | **0.0216** | **0.0216** | 0.0000 |
+| AMZN | calendar | 1s | L4 GBM, full set | 0.1966 | **0.1966** | **0.1966** | 0.0000 |
+| AMZN | calendar | 2s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| AMZN | calendar | 2s | L1 sign(queue imbalance) | 0.0043 | **0.0043** | **0.0043** | 0.0000 |
+| AMZN | calendar | 2s | L1m sign(microprice - mid) | 0.0037 | **0.0037** | **0.0037** | 0.0000 |
+| AMZN | calendar | 2s | L2 OLS on OFI | 0.0030 | **0.0030** | **0.0030** | 0.0000 |
+| AMZN | calendar | 2s | L3 ridge, full set | 0.0286 | **0.0286** | **0.0286** | 0.0000 |
+| AMZN | calendar | 2s | L4 GBM, full set | 0.2113 | **0.2113** | **0.2113** | 0.0000 |
+| AMZN | calendar | 5s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| AMZN | calendar | 5s | L1 sign(queue imbalance) | 0.0030 | **0.0030** | **0.0030** | 0.0000 |
+| AMZN | calendar | 5s | L1m sign(microprice - mid) | 0.0018 | **0.0018** | **0.0018** | 0.0000 |
+| AMZN | calendar | 5s | L2 OLS on OFI | 0.0020 | **0.0020** | **0.0020** | 0.0000 |
+| AMZN | calendar | 5s | L3 ridge, full set | 0.0400 | **0.0400** | **0.0400** | 0.0000 |
+| AMZN | calendar | 5s | L4 GBM, full set | 0.2562 | **0.2562** | **0.2562** | 0.0000 |
+| AMZN | calendar | 10s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| AMZN | calendar | 10s | L1 sign(queue imbalance) | 0.0011 | **0.0011** | **0.0011** | 0.0000 |
+| AMZN | calendar | 10s | L1m sign(microprice - mid) | -0.0004 | **-0.0004** | **-0.0004** | 0.0000 |
+| AMZN | calendar | 10s | L2 OLS on OFI | 0.0009 | **0.0009** | **0.0009** | 0.0000 |
+| AMZN | calendar | 10s | L3 ridge, full set | 0.0418 | **0.0418** | **0.0418** | 0.0000 |
+| AMZN | calendar | 10s | L4 GBM, full set | 0.2979 | **0.2979** | **0.2979** | 0.0000 |
+| AMZN | event | 1s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| AMZN | event | 1s | L1 sign(queue imbalance) | 0.0036 | **0.0036** | **0.0036** | 0.0000 |
+| AMZN | event | 1s | L1m sign(microprice - mid) | 0.0033 | **0.0033** | **0.0033** | 0.0000 |
+| AMZN | event | 1s | L2 OLS on OFI | -0.0027 | **-0.0027** | **-0.0027** | 0.0000 |
+| AMZN | event | 1s | L3 ridge, full set | 0.0163 | **0.0163** | **0.0163** | 0.0000 |
+| AMZN | event | 1s | L4 GBM, full set | 0.0657 | **0.0657** | **0.0657** | 0.0000 |
+| AMZN | event | 2s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| AMZN | event | 2s | L1 sign(queue imbalance) | 0.0053 | **0.0053** | **0.0053** | 0.0000 |
+| AMZN | event | 2s | L1m sign(microprice - mid) | 0.0038 | **0.0038** | **0.0038** | 0.0000 |
+| AMZN | event | 2s | L2 OLS on OFI | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| AMZN | event | 2s | L3 ridge, full set | 0.0243 | **0.0243** | **0.0243** | 0.0000 |
+| AMZN | event | 2s | L4 GBM, full set | 0.0835 | **0.0835** | **0.0835** | 0.0000 |
+| AMZN | event | 5s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| AMZN | event | 5s | L1 sign(queue imbalance) | 0.0045 | **0.0045** | **0.0045** | 0.0000 |
+| AMZN | event | 5s | L1m sign(microprice - mid) | 0.0038 | **0.0038** | **0.0038** | 0.0000 |
+| AMZN | event | 5s | L2 OLS on OFI | -0.0004 | **-0.0004** | **-0.0004** | 0.0000 |
+| AMZN | event | 5s | L3 ridge, full set | 0.0439 | **0.0439** | **0.0439** | 0.0000 |
+| AMZN | event | 5s | L4 GBM, full set | 0.1092 | **0.1092** | **0.1092** | 0.0000 |
+| AMZN | event | 10s | L0 zero | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| AMZN | event | 10s | L1 sign(queue imbalance) | 0.0006 | **0.0006** | **0.0006** | 0.0000 |
+| AMZN | event | 10s | L1m sign(microprice - mid) | 0.0000 | **0.0000** | **0.0000** | 0.0000 |
+| AMZN | event | 10s | L2 OLS on OFI | 0.0014 | **0.0014** | **0.0014** | 0.0000 |
+| AMZN | event | 10s | L3 ridge, full set | 0.0516 | **0.0516** | **0.0516** | 0.0000 |
+| AMZN | event | 10s | L4 GBM, full set | 0.1391 | **0.1391** | **0.1391** | 0.0000 |
+
 ## Superseded: the in-sample calibration
 
 What the earlier draft reported. The rescale is fitted on the same rows as the model, so a high-capacity rung's out-of-sample amplitude is far too large and its protocol-C R2 goes sharply negative. Kept so the size of the correction is visible rather than asserted.

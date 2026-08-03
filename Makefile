@@ -27,7 +27,7 @@ CORR_CSV ?= reports/feature_correlations.csv
 LADDER_REPORT ?= reports/ladder.md
 FLOOR_REPORT ?= reports/artifact_floor.md
 COSTS_REPORT ?= reports/costs.md
-TRIALS ?= 2152
+TRIALS ?= 2536
 
 export PYTHONPATH := src:$(PYTHONPATH)
 

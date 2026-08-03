@@ -54,11 +54,11 @@ These are known, recorded, and small — but they are places a silent regression
   2s/5s/10s horizons and 5 `st_*` columns are pinned only structurally. Five `st_*` columns
   survive replacement by zeros, which means no test currently depends on their values.
 - ~~**Calibration slope is computed but not reported.**~~ **Done 2026-08-03**, together with
-  AUC — and reporting them is what exposed the two errors described in `FINDINGS.md` §1.1a: the
-  artifact floor was frozen against the calibration channel, and about half of L4's flagship gap
-  is that channel rather than the split. Both are now measured. A first reading of the slope as a
-  leakage signature was published and withdrawn the same day; it is mechanically forced by the
-  protocol-dependent holdout rule.
+  AUC — and reporting them is what exposed the errors described in `FINDINGS.md` §1.1a: the
+  artifact floor was measured with the calibration channel frozen, and two successive attempts
+  to decompose that channel were themselves wrong. A first reading of the slope as a leakage
+  signature was published and withdrawn the same day; it is mechanically forced by the
+  protocol-dependent holdout rule. See §7 for where that ended up.
 
   What remains open here is narrower. **The slope is unstable per cell** (L3 ranges
   [−4.74, 43.20] because its denominator is the prediction's variance), so only the medians are
@@ -107,21 +107,26 @@ tradable strategy. A version of this project aimed at tradability would need pas
 queue position, and a horizon chosen by where the signal actually lives — which is a different
 project, and should be labelled one.
 
-## 7. The calibration control this repo could not build
+## 7. What the calibration control left open
 
-`A' - C` changes the calibration holdout rule, but `Rung.fit` fits the raw model on the
-complement of that holdout, so it also changes which rows the model trains on. Every number
-attributing a share of `A - C` to "the calibration rule" is therefore confounded with a training
-window, and the honest statement is a bracket ([+0.138, +0.522] for L4 on R², [+0.137, +0.190]
-on raw AUC) rather than a share.
+**Built 2026-08-03.** `A′ − C` changed the calibration holdout rule but, because `Rung.fit` fits
+the raw model on the complement of that holdout, it also changed which rows the model trained on.
+The clean version (`model_mask`) fits the raw model on the same seeded random 80% in every arm and
+moves only the scale rows: the calibration rule then moves raw AUC by exactly 0.000000, and the
+attribution it replaced was withdrawn. `FINDINGS.md` §1.1a.
 
-**The clean control** fits the raw model on the *same* random 80% under both arms and moves only
-the rows the through-origin scale is fitted on, accepting that the scale rows then overlap the
-model's. It is one branch in `score_fold` and one more protocol column. It would collapse the
-bracket to a point and is the single cheapest unbuilt thing in this repo.
+What it left open:
 
-Two smaller ones alongside it. The artifact floor is now measured over four frozen-model fit
-windows because "whole day" turned out to minimise it; **the set of windows is itself arbitrary**
-and a floor maximised over a proper search would be the defensible object. And the frozen model
-is a *frozen* model — the rungs refit theirs per fold, so the raw model's own refitting is a
-third channel no frozen predictor can bound. Nothing here measures it.
+- **The overlap has a price.** The scale rows now overlap the model rows, so each arm's
+  calibration is partly in-sample — the artifact killed on 2026-08-02 — and the arm's absolute R²
+  levels go sharply negative under the walk-forward arms. Only differences are usable, and only
+  the rank-metric columns are quoted. A control that avoided the overlap *and* held the model
+  fixed would need a third row set, i.e. a smaller effective training sample in every arm; whether
+  that trade is worth making is untested.
+- **The 80% is arbitrary**, exactly as the 80/20 calibration holdout is. No sweep.
+- **The artifact floor is maximised over four frozen-model fit windows** because "whole day"
+  turned out to minimise it, and at L4's magnitude to sit at an AUC ceiling (~0.996) where two
+  protocols cannot differ. The *set* of windows is itself arbitrary; a floor maximised over a
+  proper search would be the defensible object.
+- **The frozen model is frozen.** The rungs refit theirs per fold, so the raw model's own
+  refitting is a third channel no frozen predictor can bound. Nothing here measures it.

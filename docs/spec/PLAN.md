@@ -155,15 +155,15 @@ things: a calibration-slope *leakage* reading published that morning (it is mech
 by the harness's protocol-dependent calibration holdout — a frozen model that cannot leak
 reproduces it to three decimals), and the artifact floor itself, which froze the scale along with
 the model and so could not see the channel that matters most. Both are fixed. The consequence is
-a narrower headline: **a large share of L4's `A − C` gap is the calibration rule rather than the
-split** (+0.3173 → +0.1379 with the rule held constant, though standardising on the other rule
-gives +0.5223, so the honest object is the bracket [+0.138, +0.522]), and the like-for-like
-floors are 2–6× what was published (+0.0043 / +0.0112 / +0.0192 at L1/L3/L4 magnitudes). A
-fourth pass then showed the AUC floor was measured at a ceiling and the surviving margins are
-~7×, not ~98×. The capacity ordering survives all of it — on raw-score AUC the gap runs +0.002
-(L1, below its floor) → +0.041 (L3) → +0.174 (L4), positive in 16 of 16 cells for both fitted
-rungs and absent on all three unfitted ones, and it persists at the fold where the two protocols
-train on the same number of rows.
+corrected floors — like-for-like ones are 2–6× what was published (+0.0043 / +0.0112 / +0.0192
+at L1/L3/L4 magnitudes), and a fourth pass showed the AUC floor had been measured at a ceiling,
+so the surviving margins are ~10×, not ~98×. Two controls were built to ask whether the
+calibration rule rather than the split explains the gap; the first was confounded (it also moved
+the model's training window) and the **clean** one settles it: with the model's fit rows held
+fixed the rule moves raw AUC by exactly 0.000000 in all 96 rows. The split-only gap runs +0.002
+(L1, below its floor) → +0.041 (L3) → **+0.191** (L4), positive in 16 of 16 cells for both
+fitted rungs and absent on all three unfitted ones, and it persists at the fold where the two
+protocols train on the same number of rows.
 
 Known unmet items, carried in `FUTURE.md` rather than quietly dropped: Giacomini–White for
 nested rungs is not implemented, so the DM p-values are indicative; the passive fill model is

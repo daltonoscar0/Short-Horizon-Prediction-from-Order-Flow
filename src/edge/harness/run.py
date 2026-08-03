@@ -47,6 +47,16 @@ from edge.features.labels import ALPHA_TICKS
 from edge.harness.models import _fit_scale, build_ladder
 from edge.harness.splits import make_folds
 
+# The decoupled-control arms. Every one fits the raw model on the SAME seeded random 80% of
+# its fold's training rows, so the only thing that varies between them is which rows the
+# through-origin scale is fitted on -- and, between A and C, the split itself.
+DECOUPLED_ARMS = {
+    "A_rand": ("A", "random"),        # shuffled split, random calibration slice
+    "A_pos": ("A", "positional"),     # shuffled split, contiguous calibration slice
+    "C_rand": ("C", "random"),        # walk-forward split, random calibration slice
+    "C_pos": ("C", "positional"),     # walk-forward split, contiguous slice (C's own rule)
+}
+
 TICKERS = ("INTC", "AMZN")
 CLOCKS = ("calendar", "event")
 DATE = "2012-06-21"
@@ -116,6 +126,20 @@ def scale_holdout_mask(n_train, protocol, fold_id, holdout_rule=None):
     return hold
 
 
+def model_fit_mask(n_train, fold_id, seed=0):
+    """The raw model's training rows for the DECOUPLED control: a seeded random 80%.
+
+    Deliberately independent of the protocol and of the calibration rule, so that varying the
+    rule cannot vary the model's training window. Scattered rather than positional for the same
+    reason -- a positional 80% would hand one arm the day's tail and withhold it from the
+    other, which is the exact confound this exists to remove.
+    """
+    rng = np.random.default_rng(2000 + 17 * seed + fold_id)
+    mask = np.zeros(n_train, dtype=bool)
+    mask[rng.choice(n_train, size=max(1, int(n_train * 0.8)), replace=False)] = True
+    return mask
+
+
 def _directional_auc(y_te, pred):
     """AUC on the rows the deadband calls up or down. Flats excluded; one-sided blocks NaN."""
     y_cls = _classify(y_te)
@@ -125,7 +149,8 @@ def _directional_auc(y_te, pred):
     return auc_binary((y_cls[d] > 0.0).astype(np.float64), pred[d])
 
 
-def score_fold(rung, cols, y, fold, common_mask, causal_scale=True, holdout_rule=None):
+def score_fold(rung, cols, y, fold, common_mask, causal_scale=True, holdout_rule=None,
+               decouple_scale=False, seed=0):
     """Fit on the fold's training rows, score its test rows. Returns a metrics dict or None."""
     feats = list(rung.features)
     if feats:
@@ -146,7 +171,10 @@ def score_fold(rung, cols, y, fold, common_mask, causal_scale=True, holdout_rule
         hold = scale_holdout_mask(tr.size, fold.protocol, fold.fold_id, holdout_rule)
         if hold.all() or not hold.any():
             return None
-        rung.fit(X_all[tr], y[tr], scale_holdout=hold)
+        # The decoupled control holds the model's fit rows fixed across calibration rules,
+        # accepting that the scale rows then overlap them. See models.Rung.fit.
+        mm = model_fit_mask(tr.size, fold.fold_id, seed=seed) if decouple_scale else None
+        rung.fit(X_all[tr], y[tr], scale_holdout=hold, model_mask=mm)
     else:
         rung.fit(X_all[tr], y[tr])
     pred = rung.predict(X_all[te])
@@ -186,7 +214,7 @@ def score_fold(rung, cols, y, fold, common_mask, causal_scale=True, holdout_rule
 
 
 def run_cell(cols, y, ts, horizon_ns, protocol, seed, embargo_ns=None, n_folds=N_FOLDS,
-             causal_scale=True, holdout_rule=None):
+             causal_scale=True, holdout_rule=None, decouple_scale=False):
     """Every rung under one protocol. Returns {rung_name: {metric: fold_summary}}."""
     folds = make_folds(
         ts, horizon_ns=horizon_ns, protocol=protocol,
@@ -195,7 +223,8 @@ def run_cell(cols, y, ts, horizon_ns, protocol, seed, embargo_ns=None, n_folds=N
     common_mask = common_usable_mask(cols, y, seed=seed)
     out = {"_common_row_fraction": float(common_mask.mean())}
     for rung in build_ladder(seed=seed):
-        per_fold = [score_fold(rung, cols, y, f, common_mask, causal_scale, holdout_rule)
+        per_fold = [score_fold(rung, cols, y, f, common_mask, causal_scale, holdout_rule,
+                               decouple_scale, seed)
                     for f in folds]
         kept = [r for r in per_fold if r is not None]
         if not kept:
@@ -398,7 +427,8 @@ def main(argv=None):
     p.add_argument("--holdout-control", action="store_true",
                    help="also re-run protocol A under C's positional calibration holdout, so "
                         "the share of the A-C gap that is the calibration RULE rather than "
-                        "the split is visible (2026-08-03 red team)")
+                        "the split is visible (2026-08-03 red team). Implies the DECOUPLED "
+                        "control below, which is the clean version of the same comparison")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args(argv)
 
@@ -416,6 +446,7 @@ def main(argv=None):
     floors_frozen_scale = {}
     insample = {}
     holdout = {}
+    decoupled = {}
     for ticker in tickers:
         for clock in clocks:
             label_cols = [f"label_y_mid_{h}" for h in horizons]
@@ -447,12 +478,22 @@ def main(argv=None):
                     refit_scale=False,
                 )
                 if args.holdout_control:
-                    # Protocol A under C's positional holdout: same split, same folds, same
-                    # seed, same model -- only the calibration rule moves.
+                    # Protocol A under C's positional holdout. NOT a clean control: the rule
+                    # also moves the model's training rows, so this arm is a temporally
+                    # handicapped model as well as a differently-calibrated one.
                     holdout[(ticker, clock, h)] = run_cell(
                         cols, y, ts, HORIZON_NS[h], "A", args.seed,
                         holdout_rule="positional",
                     )
+                    # The CLEAN control: the model's fit rows are the same seeded random 80%
+                    # in every arm, and only the scale rows move. Both protocols get it, so
+                    # the difference between these two columns is the calibration rule and
+                    # nothing else.
+                    for arm, (protocol, rule) in DECOUPLED_ARMS.items():
+                        decoupled[(ticker, clock, h, arm)] = run_cell(
+                            cols, y, ts, HORIZON_NS[h], protocol, args.seed,
+                            holdout_rule=rule, decouple_scale=True,
+                        )
                 if args.in_sample_scale:
                     # The superseded calibration, kept as a diagnostic so the size of the
                     # correction is visible rather than asserted.
@@ -470,18 +511,20 @@ def main(argv=None):
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w") as fh:
         _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, args,
-                      floors, insample, holdout, floors_frozen_scale)
+                      floors, insample, holdout, floors_frozen_scale, decoupled)
     dt = time.time() - t0
     print(f"wrote {args.out} in {dt:.1f}s")
     return 0
 
 
 def _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, args,
-                  floors=None, insample=None, holdout=None, floors_frozen_scale=None):
+                  floors=None, insample=None, holdout=None, floors_frozen_scale=None,
+                  decoupled=None):
     floors = floors or {}
     insample = insample or {}
     holdout = holdout or {}
     floors_frozen_scale = floors_frozen_scale or {}
+    decoupled = decoupled or {}
     w = fh.write
     w("# Ladder under three evaluation protocols (Phase 2)\n\n")
     # Echo the FULL effective argument set: the previous header printed only --seed, so the
@@ -656,6 +699,86 @@ def _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, 
                           f"{_fmt(vc)} | {_fmt(gap)} | **{_fmt(gap_p)}** | "
                           f"{_fmt(share, 3)} | {_fmt(ua - uc, 4)} | "
                           f"**{_fmt(up - uc, 4)}** |\n")
+        w("\n")
+
+    if decoupled:
+        w("## The CLEAN calibration control: model rows fixed, only the scale rows move\n\n")
+        w("Every arm below fits the raw model on the **same seeded random 80%** of each fold's ")
+        w("training rows -- the same rule under every protocol and every calibration slice -- ")
+        w("and fits the through-origin scale on the slice named in the column. The scale rows ")
+        w("therefore OVERLAP the model rows; that is the accepted cost, it is identical in ")
+        w("every arm, and in exchange the calibration rule can be varied without also varying ")
+        w("the model's training window.\n\n")
+        w("Why this exists: `A' - C` above cannot separate the two. `Rung.fit` fits the model ")
+        w("on the COMPLEMENT of the calibration holdout, so switching A to the positional rule ")
+        w("also takes away the day's tail. The 2x2 gave two rule-matched answers that ")
+        w("disagreed by a factor of ~4, which is why the earlier headline was a bracket. ")
+        w("Here the row difference is the rule and nothing else.\n\n")
+        w("`A_rand - C_pos` is the fully uncontrolled comparison reproduced inside this arm ")
+        w("(each protocol on its own rule). `A_pos - C_pos` and `A_rand - C_rand` are the two ")
+        w("rule-matched comparisons; **their spread is what the calibration rule is worth**, ")
+        w("and it is now a clean measurement rather than a bracket over a confound.\n\n")
+        w("> **READ THE DIFFERENCES, NOT THE LEVELS.** The overlap makes each arm's scale ")
+        w("partly IN-SAMPLE, which is the calibration that was killed on 2026-08-02 -- and it ")
+        w("bites here exactly as it did then: under the walk-forward arms a high-capacity ")
+        w("rung's amplitude is far too large and its R2-vs-zero goes sharply negative. The ")
+        w("overlap is identical in every arm, so a DIFFERENCE between arms is still clean, ")
+        w("but the absolute R2 levels in this table are not comparable to the headline ladder ")
+        w("and must not be quoted beside it. The raw-AUC table below has no amplitude in it ")
+        w("and is free of this.\n\n")
+        w("| ticker | clock | h | rung | A_rand | A_pos | C_rand | C_pos | A_rand-C_pos | "
+          "**A_pos-C_pos** | **A_rand-C_rand** | rule spread |\n")
+        w("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+        for ticker in tickers:
+            for clock in clocks:
+                for h in horizons:
+                    for name in ladder_names:
+                        arms = {a: decoupled.get((ticker, clock, h, a), {}).get(name)
+                                for a in DECOUPLED_ARMS}
+                        if not all(arms.values()):
+                            continue
+                        v = {a: c["r2"]["mean"] for a, c in arms.items()}
+                        unc = v["A_rand"] - v["C_pos"]
+                        m_pos = v["A_pos"] - v["C_pos"]
+                        m_rand = v["A_rand"] - v["C_rand"]
+                        w(f"| {ticker} | {clock} | {h} | {name} | {_fmt(v['A_rand'])} | "
+                          f"{_fmt(v['A_pos'])} | {_fmt(v['C_rand'])} | {_fmt(v['C_pos'])} | "
+                          f"{_fmt(unc)} | **{_fmt(m_pos)}** | **{_fmt(m_rand)}** | "
+                          f"{_fmt(abs(m_pos - m_rand))} |\n")
+        w("\n")
+
+        w("### The same control on raw-score AUC -- where the rule spread is ZERO BY "
+          "CONSTRUCTION, and that is the finding\n\n")
+        w("Raw AUC is a rank statistic on the raw model, so it never sees the scale at all. ")
+        w("Once the model's fit rows no longer move with the calibration rule, the rule ")
+        w("CANNOT move raw AUC, and the `rule spread` column below is identically 0.0000. ")
+        w("That is an identity, not a measurement, and it is reported as one.\n\n")
+        w("**What it settles.** The published `A' - C` shrank L4's raw-AUC gap from +0.1740 to ")
+        w("+0.1371 and that shrink was attributed to the calibration rule. It cannot have ")
+        w("been: with the model held fixed the rule is worth exactly nothing on this metric. ")
+        w("The whole of that shrink was the model's LOST TRAINING WINDOW -- under the ")
+        w("positional rule the model is fitted on the first 80% of the day and never sees its ")
+        w("tail. The `A_rand - C_pos` column here is the split effect measured with a ")
+        w("rule-independent model, and it is the number to quote.\n\n")
+        w("| ticker | clock | h | rung | A_rand-C_pos | **A_pos-C_pos** | **A_rand-C_rand** | "
+          "rule spread |\n")
+        w("|---|---|---|---|---|---|---|---|\n")
+        for ticker in tickers:
+            for clock in clocks:
+                for h in horizons:
+                    for name in ladder_names:
+                        arms = {a: decoupled.get((ticker, clock, h, a), {}).get(name)
+                                for a in DECOUPLED_ARMS}
+                        if not all(arms.values()):
+                            continue
+                        v = {a: c.get("auc_raw", {}).get("mean", np.nan)
+                             for a, c in arms.items()}
+                        unc = v["A_rand"] - v["C_pos"]
+                        m_pos = v["A_pos"] - v["C_pos"]
+                        m_rand = v["A_rand"] - v["C_rand"]
+                        w(f"| {ticker} | {clock} | {h} | {name} | {_fmt(unc, 4)} | "
+                          f"**{_fmt(m_pos, 4)}** | **{_fmt(m_rand, 4)}** | "
+                          f"{_fmt(abs(m_pos - m_rand), 4)} |\n")
         w("\n")
 
     if insample:

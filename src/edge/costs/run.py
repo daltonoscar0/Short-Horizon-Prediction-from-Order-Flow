@@ -104,9 +104,9 @@ class _ConstantDirection(Rung):
     def _raw(self, X):
         return np.full(X.shape[0], self.sign, dtype=np.float64)
 
-    def fit(self, X, y, scale_holdout=None):
-        # `scale_holdout` is accepted and IGNORED, deliberately. A fitted rescale could flip
-        # the sign, and a control that moves with the calibration is not a control.
+    def fit(self, X, y, scale_holdout=None, model_mask=None):
+        # Both mask arguments are accepted and IGNORED, deliberately. A fitted rescale could
+        # flip the sign, and a control that moves with the calibration is not a control.
         self.scale_ = 1.0
         return self
 
@@ -129,7 +129,7 @@ class _Oracle(Rung):
     def _raw(self, X):
         return np.sign(X[:, 0])
 
-    def fit(self, X, y, scale_holdout=None):
+    def fit(self, X, y, scale_holdout=None, model_mask=None):
         self.scale_ = 1.0  # accepted and ignored: an upper bound must not be rescaled either
         return self
 

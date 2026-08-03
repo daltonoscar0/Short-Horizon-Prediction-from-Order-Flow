@@ -124,14 +124,24 @@ model gives floors of +0.0020/+0.0020/+0.0153 at L1/L3/L4 magnitudes against the
 measured on a predictor that cannot leak. Every headline cell reports the like-for-like floor at
 its own rung's magnitude, and a rung that does not clear it has measured nothing.
 
-**The calibration rule is a channel in `A − C`, and it is decomposed rather than absorbed.**
-Under A the scale's holdout is a random 20% of training rows, which is exchangeable with A's
-random test fold; under B/C/D it is the last 20% in time, which is not exchangeable with a later
-block. That is a legitimate part of what shuffling costs you, but it is a *different* mechanism
-from seeing the future. Re-running A under C's rule (`--holdout-control`) leaves L4's median gap
-at **+0.1379** of +0.3173 and takes L1's to **−0.0021**. Found on 2026-08-03 when a
-calibration-slope reading was published as a leakage signature and the red team showed a frozen
-model reproduces it.
+**The calibration rule was suspected of being a channel in `A − C`. It is not.** Under A the
+scale's holdout is a random 20% of training rows, exchangeable with A's random test fold; under
+B/C/D it is the last 20% in time, which is not. Re-running A under C's rule (`A′`) shrank L4's
+gap from +0.3173 to +0.1379 and that was published as the rule's contribution — wrongly. `Rung.fit`
+fits the model on the *complement* of the calibration holdout, so `A′` also took away the model's
+training tail.
+
+The **clean control** decouples them: the raw model is fitted on the same seeded random 80% of
+each fold's training rows in every arm (`model_mask`), and only the scale rows move. On raw AUC,
+which is a rank statistic on the raw model and therefore cannot see the scale at all, the rule
+then moves the gap by **0.000000 in all 96 rows** — an identity. The whole `A′` shrink was the
+lost training window. The split-only gap is **+0.1913** for L4, larger than the uncontrolled
+figure; on R² the rule is worth a median 0.0116, about 4%.
+
+The cost of that control, stated because it is real: the scale rows now overlap the model rows,
+which makes each arm's calibration partly in-sample — the artifact killed on 2026-08-02 — so the
+arm's absolute R² levels go sharply negative under the walk-forward arms and are not quoted
+anywhere. The overlap is identical across arms, so the differences are clean.
 
 **Folds are cut on wall-clock time, not stamp index.** 32% of INTC event-clock stamps sit
 within 0.5 ms of the previous one and carry ~2.3× the correlation of isolated stamps; an index
@@ -252,7 +262,7 @@ stamps) for CIs on the **mean per trade** — an earlier draft printed that inte
 *total* PnL, off by a factor of `n_trades`. Diebold–Mariano between adjacent rungs on per-trade
 gross PnL, with loss `= −gross ticks` (squaring a PnL would test whether one rung's PnL is
 larger in *magnitude*, which is the wrong hypothesis) and a HAC lag equal to the block length.
-Deflated Sharpe on the **gross** series at n = 2,152 trials: on the net series every rung has a
+Deflated Sharpe on the **gross** series at n = 2,536 trials: on the net series every rung has a
 per-trade Sharpe near −7.6 and the DSR is 0.000 at every trial count from 1 to 10¹², which is a
 tautology rather than a finding.
 
@@ -298,7 +308,7 @@ make test       # the full suite
 python3 -m edge.harness.run --seed 0 --embargo-sweep --in-sample-scale \
     --holdout-control                                                  # the optimism table
 python3 -m edge.harness.floors --seed 0                 # the artifact floor, per rung
-python3 -m edge.costs.run   --seed 0 --trials 2152 \
+python3 -m edge.costs.run   --seed 0 --trials 2536 \
     --tickers INTC,AMZN --clocks calendar,event --horizons 1s,5s   # break-even table
 ```
 

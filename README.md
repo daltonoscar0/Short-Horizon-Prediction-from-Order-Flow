@@ -40,53 +40,36 @@ all 96 (ticker × clock × horizon) cells, out-of-sample R² against a zero fore
 
 Three things fall out of that table.
 
-1. **The gap tracks capacity — and about half of L4's is the calibration rule, not the split.**
-   A parameter-free rung gains +0.004; a GBM on the same features, rows, folds and seed gains
-   **+0.317**. But `A − C` bundles two mechanisms, and the *floor* column only polices one of
-   them. The harness fits each rung's output scale on a held-out slice of training rows, and
-   that slice is a **random** 20% under A (exchangeable with A's random test fold) against the
-   **last** 20% in time under B/C/D. Re-running A under C's rule — same split, folds, seed and
-   model, only the rule moves:
+1. **The gap tracks capacity, and it is not the harness's own calibration.** A parameter-free
+   rung gains +0.004; a GBM on the same features, rows, folds and seed gains **+0.317**. The
+   headline is restated below on **directional AUC** scored on the raw model output — a rank
+   metric with no amplitude in it, so neither the output scale nor its sign can touch it:
 
-   | rung | `A − C` | **`A′ − C`** (rule held constant) | *floor* | clears floor by |
-   |---|---|---|---|---|
-   | L1 `sign(queue imbalance)` | +0.0043 | **−0.0021** | *+0.0043* | **not at all** |
-   | L3 ridge | +0.0587 | **+0.0542** | *+0.0112* | 4.8× |
-   | L4 GBM | **+0.3173** | **+0.1379** | *+0.0192* | 7.2× |
-
-   `A′` is not a perfectly clean control — the holdout rule also moves which rows the model
-   trains on — so the honest object is a bracket: standardising on the *other* rule puts L4 at
-   +0.5223, and `A − C` sits mid-range in **[+0.138, +0.522]**. On raw AUC the bracket is tight,
-   [+0.137, +0.190], which is one more reason to quote AUC.
-
-   The capacity ordering survives; the headline magnitude was overstated roughly 2× for the
-   GBM. With the rule held constant the parameter-free rung shows **no optimism at all**, which
-   is what a rung with nothing to fit should show and what the first version of this table did
-   not verify. The *floor* is a **frozen** model — fitted once on the whole day, scored under
-   every protocol with only the scale refitted per fold — so it cannot have learned anything
-   from any split.
-
-   The same claim on **directional AUC**, which has no amplitude in it, scored on the raw
-   output so the scale's sign cannot touch it:
-
-   | rung | AUC under A | AUC under C | A − C | **A′ − C** | cells positive | *floor* |
+   | rung | AUC under A | AUC under C | `A − C` | **clean split-only** | *worst-case floor* | cells positive |
    |---|---|---|---|---|---|---|
-   | L1 `sign(queue imbalance)` | 0.6545 | 0.6573 | +0.0022 | +0.0023 | 13 / 16 | *+0.0031* |
-   | L1m `sign(microprice − mid)` | 0.5880 | 0.5892 | −0.0018 | −0.0018 | 6 / 16 | *+0.0031* |
-   | L2 OLS on OFI | 0.6546 | 0.6567 | −0.0002 | −0.0002 | 7 / 16 | *+0.0031* |
-   | L3 ridge | 0.7811 | 0.7319 | +0.0409 | **+0.0283** | **16 / 16** | *+0.0025* |
-   | L4 GBM | 0.9059 | 0.7122 | **+0.1740** | **+0.1371** | **16 / 16** | *+0.0014* |
+   | L1 `sign(queue imbalance)` | 0.6545 | 0.6573 | +0.0022 | **+0.0023** | *+0.0053* | 13 / 16, below floor |
+   | L1m `sign(microprice − mid)` | 0.5880 | 0.5892 | −0.0018 | **−0.0018** | *+0.0053* | — |
+   | L2 OLS on OFI | 0.6546 | 0.6567 | −0.0002 | **−0.0002** | *+0.0053* | — |
+   | L3 ridge | 0.7811 | 0.7319 | +0.0409 | **+0.0409** | *+0.0066* | **16 / 16** |
+   | L4 GBM | 0.9059 | 0.7122 | +0.1740 | **+0.1913** | *+0.0383* | **16 / 16** |
 
    Shuffled k-fold says the GBM ranks up-moves above down-moves 91% of the time. The correct
-   protocol says 71%. The three unfitted rungs show no gap in either direction. **That `A′ − C`
-   column is the headline** — everything else on this page is a step toward it.
+   protocol says 71%. The three unfitted rungs show no gap in either direction.
 
-   Margins are quoted against the *worst* artifact floor over four frozen-model fit windows,
-   not the whole-day one, which at the GBM's magnitude is measured at an AUC ceiling (~0.996)
-   where two protocols cannot differ much. On that basis L4 clears by **~7× (min cell 1.5×)**
-   and is positive in **79 of 80 folds**; L3 clears by more in ratio but is a fold-0 story
-   (positive in 55 of 80). And the gap is not just training-set size: at the last fold, where
-   the two protocols train on within 6% of the same number of rows, L4 is still **+0.094**.
+   **The *clean split-only* column is the headline.** It comes from a control that fits the raw
+   model on the **same seeded random 80%** of each fold's training rows in every arm and moves
+   only the rows the output scale is fitted on. With the model held fixed, the calibration rule
+   moves raw AUC by **0.000000 in all 96 rows** — an identity, since a rank statistic never sees
+   the scale. So none of the gap is the harness's own calibration design. An earlier control
+   that appeared to show otherwise was confounded with the model's training window.
+
+   The *floor* is a **frozen** model — fitted once, scored under every protocol with only the
+   scale refitted per fold — so it cannot have learned anything from any split. It is quoted at
+   the worst of four fit windows, because fitting it on the whole day puts the GBM at an AUC
+   ceiling (~0.996) where two protocols cannot differ much. On that basis L4 clears by **~10×**.
+
+   And the gap is not just training-set size: at the last fold, where the two protocols train on
+   within 6% of the same number of rows, L4 is still **+0.094**.
 2. **It is adjacency, not the future.** Protocol D hands the model the entire future in blocks
    *disjoint* from the test set and that buys L4 almost nothing (`D − C` = +0.007). Nearly all
    of the gap is `A − D` = +0.296 — training rows that are temporal *neighbours* of test rows.
@@ -127,7 +110,7 @@ my mind": [`FINDINGS.md`](FINDINGS.md).
 make data       # raw LOBSTER CSVs -> validated event frame + data-quality report
 make features   # -> data/features/*.parquet + the feature x label correlation table
 make selfcheck  # Cont-Kukanov-Stoikov reproduction; fails loudly if the relation breaks
-make test       # 416 tests
+make test       # 429 tests
 
 make ladder     # the optimism table + embargo sensitivity -> reports/ladder.md
 make floors     # the frozen-predictor artifact floor    -> reports/artifact_floor.md
@@ -140,7 +123,7 @@ echo the flags rather than the make target:
 ```bash
 python3 -m edge.harness.run --seed 0 --embargo-sweep --in-sample-scale --holdout-control
 python3 -m edge.harness.floors --seed 0
-python3 -m edge.costs.run --seed 0 --trials 2152 \
+python3 -m edge.costs.run --seed 0 --trials 2536 \
     --tickers INTC,AMZN --clocks calendar,event --horizons 1s,5s
 ```
 

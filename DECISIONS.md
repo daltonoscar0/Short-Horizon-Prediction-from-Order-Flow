@@ -727,3 +727,43 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   run, and the AMZN cell cited as a null now leans the other way at p = 0.088. The honest reading
   is no significant difference in either direction. The break-even ordering the section actually
   rests on is unaffected.
+
+## The clean calibration control (2026-08-03)
+
+- 2026-08-03 — **`Rung.fit` gains `model_mask`, and the decoupled control it enables reverses an
+  attribution published the same day.** `A' - C` was built to isolate the calibration rule's
+  contribution to the A-versus-C gap and could not: `Rung.fit` fits the raw model on the
+  complement of the calibration holdout, so switching A to the positional rule also took away
+  the model's training tail. `model_mask` decouples the two row sets — the raw model is fitted on
+  a seeded random 80% that is IDENTICAL in every arm, and only the scale rows move, accepting
+  that they now overlap the model's.
+- 2026-08-03 — **The calibration rule is worth exactly zero on a rank metric, by construction,
+  and that is the finding.** Raw AUC is a rank statistic on the raw model, so it never sees the
+  scale; once the model's fit rows stop moving with the rule, the rule cannot move raw AUC. It
+  measures 0.000000 across all 96 rows. Therefore the whole `A' - C` shrink (+0.1740 -> +0.1371)
+  was the model's lost training window, not the calibration. The split-only gap is **+0.1913**
+  for L4 — LARGER than the uncontrolled figure — positive in 16 of 16 cells, +0.0657 to +0.3132.
+  "About half of L4's gap is the calibration rule" and the bracket [+0.138, +0.522] are both
+  withdrawn. On R², where the metric does see amplitude, the rule is worth a median 0.0116 for
+  L4, about 4% of its gap.
+- 2026-08-03 — **The decoupled arm's absolute R² levels are not quoted anywhere, and the report
+  says so on its face.** The accepted overlap makes each arm's scale partly in-sample, which is
+  precisely the calibration killed on 2026-08-02, and it bites the same way: under the
+  walk-forward arms a high-capacity rung's amplitude is far too large and R2-vs-zero goes sharply
+  negative. The overlap is identical in every arm so the DIFFERENCES are clean, but the levels
+  are not comparable to the headline ladder. This is a real cost of the control and it is the
+  reason the result is stated on AUC.
+- 2026-08-03 — `tests/test_decoupled_control.py` was written before the branch and was RED on the
+  import. It pins the two properties that make the thing a control at all: the model's fit rows
+  do not move when the rule moves, and the scale's do. It also contains a guard test asserting
+  that WITHOUT the control the model's raw AUC does move with the rule — without that, the
+  headline test could pass vacuously.
+- 2026-08-03 — Adding `model_mask` broke every `fit` override in the repo (`_ConstantDirection`,
+  `_Oracle`, `L0Zero`, and the `StubRung` in two test files) with a `TypeError`. That is the
+  second signature drift in two days, and the first one had a test written for it the day before
+  — which did not catch this because it only passed `scale_holdout`. The test now passes every
+  keyword the harness can pass, not just the one that broke it first.
+- 2026-08-03 — Trial count 2,152 -> **2,536**: +384 for the four decoupled arms. Trial 20, the
+  confounded control it supersedes, stays counted on the same principle as trials 5 and 9 — it
+  was fitted, it produced a number that was reported, and removing it would flatter the
+  deflation.
