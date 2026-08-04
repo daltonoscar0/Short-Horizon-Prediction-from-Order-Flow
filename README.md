@@ -124,6 +124,8 @@ my mind": [`FINDINGS.md`](FINDINGS.md).
 ```bash
 make data       # raw LOBSTER CSVs -> validated event frame + data-quality report
 make features   # -> data/features/*.parquet + the feature x label correlation table
+                # (the summary table is committed; the full 7,264-row grid is emitted
+                #  as reports/feature_correlations.csv and left uncommitted for size)
 make selfcheck  # Cont-Kukanov-Stoikov reproduction; fails loudly if the relation breaks
 make test       # 435 tests
 
