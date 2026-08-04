@@ -46,7 +46,7 @@ model-invariant. None of that makes the PnL wrong, so this is not a kill.
    For the record, `reports/ladder.md` gives L1 A-C gaps of 0.0019 (INTC/cal/1s) to 0.0134
    (INTC/event/1s) in R2 vs zero, against an L1 C-level of 0.0105-0.0719. That is 2-18% relative
    optimism on a rung with no fitted parameters beyond a one-scalar rescale. It is small next to
-   L4's 0.49, but it is not zero, and it belongs in the phase-2 adversary's scope, not mine.
+   L4's 0.49, but it is not zero, and it belongs in the phase-2 red team's scope, not mine.
 7. **Base-rate artifact** — the PnL analogue is a directional-bias artifact, and it is real but
    secondary (`const.py`). A constant always-short predictor on the same trade times earns
    +0.00273 gross ticks/trade on INTC calendar 1s and **+0.12645** on AMZN event 5s, against

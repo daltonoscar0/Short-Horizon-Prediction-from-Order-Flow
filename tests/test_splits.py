@@ -316,7 +316,7 @@ class TestInvariantsCommonToEveryProtocol(unittest.TestCase):
 
 class TestIrregularStampsFromTheEventClock(unittest.TestCase):
     """The event clock is bursty -- 32% of INTC stamps sit within 0.5ms of the previous one
-    (adversary phase-1 report). Fold boundaries cut on TIME must still hold."""
+    (phase-1 red-team report). Fold boundaries cut on TIME must still hold."""
 
     def setUp(self):
         rng = np.random.default_rng(0)
@@ -331,7 +331,7 @@ class TestIrregularStampsFromTheEventClock(unittest.TestCase):
         self.assertEqual(assert_no_label_leak(self, folds, self.ts, horizon), 0)
 
     def test_a_burst_cannot_straddle_a_protocol_c_boundary(self):
-        # The adversary's specific warning: if folds are cut on STAMP INDEX rather than wall
+        # The red team's specific warning: if folds are cut on STAMP INDEX rather than wall
         # clock, one burst can land in two folds and both will hold the same episode.
         horizon = 1 * NS
         folds = make_folds(

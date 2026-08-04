@@ -4,7 +4,7 @@ Adversarial tests for this module were written BEFORE it existed (tests/test_spl
 RULES.md rule 2) and include a deliberately broken splitter that the leak detector is
 asserted to catch.
 
-TEST BLOCKS ARE CUT ON WALL-CLOCK TIME, NOT STAMP INDEX. The phase-1 adversary measured that
+TEST BLOCKS ARE CUT ON WALL-CLOCK TIME, NOT STAMP INDEX. The phase-1 red team measured that
 32% of INTC event-clock stamps sit within 0.5 ms of the previous one and that those bursts
 carry ~2.3x the correlation of isolated stamps; cutting on stamp index lets a single burst
 land on both sides of a boundary, so the two folds hold the same episode and the result reads

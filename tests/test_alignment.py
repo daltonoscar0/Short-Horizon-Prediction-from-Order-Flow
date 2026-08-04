@@ -1,6 +1,6 @@
 """The alignment invariant: orderbook row k is the book state AFTER message k.
 
-Construction (per the phase-0 brief): find type-3 (full delete) messages. Assert the
+Construction (per the phase-0 spec): find type-3 (full delete) messages. Assert the
 displayed size at that price level in row k-1 exceeds row k by exactly the message's size
 field; a level that the delete fully empties simply stops appearing in row k, which the
 size lookup already treats as size 0. Off-by-one inverts the assertion, so this file also
@@ -219,7 +219,7 @@ class TestAlignmentOnCommittedFixture(unittest.TestCase):
     "raw LOBSTER CSVs not present under data/raw/lobster: "
     "the load-bearing full-scale invariant test_orderbook_row_is_state_after_message "
     "(500 sampled type-3 deletes per ticker against the real INTC/AMZN files) DID NOT "
-    "RUN this session. TestAlignmentOnCommittedFixture above ran the same identity on a "
+    "RUN in this test run. TestAlignmentOnCommittedFixture above ran the same identity on a "
     "12-row committed fixture, but that is the weaker check -- fetch the raw data "
     "(DECISIONS.md) and rerun before trusting this invariant at full scale.",
 )

@@ -110,7 +110,7 @@ python3 scratch/causalC.py     # 16 cells x {A,C} x 6 rungs, causal_scale=True
     −0.0130 — monotone in training-set size. `FINDINGS.md` §3 reports that 45 of 80 rows lost
     more than half their gap when fold 0 was dropped; that correction is not in `ladder.md`.
 
-## Additional experiments from the brief
+## Additional experiments
 
 - **Labels shuffled.** IC collapses to |0.006| for L1 and L4 under all three protocols. R2 goes
   mildly negative, as it must for any rung with nonzero prediction variance. Passes — but note

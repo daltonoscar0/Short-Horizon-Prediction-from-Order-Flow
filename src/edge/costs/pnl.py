@@ -12,7 +12,7 @@ THE DECISION SEQUENCE, and where each one is allowed to look:
 
 The signal is formed at `t` but the ENTRY PRICE is read at `t + delta`. That gap is the whole
 point of the latency ladder: a signal whose edge has evaporated by the time it can be acted on
-is latency arbitrage, not alpha. The phase-1 adversary measured that OFI's content decays
+is latency arbitrage, not alpha. The phase-1 red team measured that OFI's content decays
 inside 100 ms, so the 100 ms rung is expected to be brutal here -- and if it is not, that is
 itself suspicious.
 

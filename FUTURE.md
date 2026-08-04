@@ -100,7 +100,7 @@ folds too small to score. This is a consequence of item 1, not an independent ta
 ## 6. The question this repo cannot answer
 
 **Does any of this survive at a horizon where the cost model is not the whole story?** The
-phase-1 adversary measured that OFI's content decays inside 100 ms, and the cost model shows
+phase-1 red team measured that OFI's content decays inside 100 ms, and the cost model shows
 that even perfect foresight of the 1-second mid move loses money once the spread is crossed.
 That combination means the honest ladder here is a statement about *prediction*, not about a
 tradable strategy. A version of this project aimed at tradability would need passive fills,

@@ -809,7 +809,7 @@ def main(argv=None):
     # Print the BREAKDOWN, never a bare head of the list. A `suspicious[:20]` tail on a
     # 488-item list produced a phase-1 triage that concluded "all INTC, AMZN clean" when
     # AMZN in fact holds 164 flagged pairs and the single largest correlation in the whole
-    # report (adversary phase1-lookahead-normalization-2026-07-31, F3). Anything that reads
+    # report (red-team report phase1-lookahead-normalization-2026-07-31, F3). Anything that reads
     # like a summary has to be computed over the whole list.
     print(f"suspicious items: {len(suspicious)}")
     by_group = {}

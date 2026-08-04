@@ -1,6 +1,6 @@
 # DECISIONS — Edge
 
-Every choice made without asking the human: what was decided, the one-line rationale, the
+Every choice made without stopping to deliberate: what was decided, the one-line rationale, the
 date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions table.
 
 - 2026-07-30 — Raw LOBSTER CSVs live at `data/raw/lobster/`, fetched from the Hugging Face
@@ -54,7 +54,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
 - 2026-07-30 — Price-scaling sanity check (median mid, `/10000`) run against the raw
   orderbook files directly (pyarrow, before the adapter exists): INTC median mid $27.02
   (range $26.62–$27.60), AMZN median mid $222.66 (range $220.52–$226.03) — both inside the
-  brief's [20,35] / [200,250] bounds, confirming `/10000` is the correct dollar conversion.
+  spec's [20,35] / [200,250] bounds, confirming `/10000` is the correct dollar conversion.
   Recorded in `docs/DATA_CONTRACT.md`; the adapter-level assertion of this is deferred to
   the data-quality-report step.
 - 2026-07-30 — `make test`/`make data` both green: `src/edge/io/lobster.py` implements
@@ -103,7 +103,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
 - 2026-07-30 — `docs/spec/PLAN.md` Phase 0 checkboxes ticked, status moved to Phase 1, next
   three tasks set to `FEATURES.md` implementation / two-clock construction / rolling-only
   normalization (the first three Phase 1 bullets), per the Phase-0 exit criteria in the
-  task brief.
+  task spec.
 - 2026-07-30 — U-shape heuristic in `quality.py` replaced: was "first bucket AND last
   bucket both above the profile median", now "mean event rate over the first and last
   quartile of bins exceeds the mean over the interior bins". The old rule turned on two
@@ -235,7 +235,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   blank). Half a tick is FEATURES.md sec. 7's own first suggestion and the smallest move that
   is not a rounding artifact in a whole-cent book. Not fit to data, training or otherwise; the
   sensitivity sweep in reports/feature_correlations.md is reported, never used to pick it.
-- 2026-07-31 — Adversary on phase-1 lookahead/normalization returned
+- 2026-07-31 — Red-team pass on phase-1 lookahead/normalization returned
   `VERDICT: SURVIVED WITH CAVEATS` (`reports/adversary/phase1-lookahead-normalization-2026-07-31.md`).
   The flagged feature/label correlations are genuine microstructure, not leakage, established
   six independent executable ways: an independent re-derivation of stamps/OFI/qi/label from the
@@ -278,7 +278,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   console tail — concluding "19 leak smells, all INTC, AMZN clean". False: 446 leak smells
   (282 INTC, 164 AMZN), and the largest single correlation in all of phase 1 is AMZN/event
   `tr_aggr_imb_100ms` at rho = +0.5307, not anything on INTC. That wrong premise was then
-  handed to the adversary as a framing. It passes the same causality probes (fwd+1 0.6293,
+  handed to the red team as a framing. It passes the same causality probes (fwd+1 0.6293,
   bwd-1 0.4538, 81.5% balanced directional accuracy on non-flat labels) so nothing is
   invalidated, but the triage was worthless. The console block now prints a count by scope
   over the WHOLE list and says explicitly that it is not the list. General rule taken from
@@ -293,7 +293,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   fold, not absorbed. And the trial log is empty against a 7,264-cell univariate surface;
   no model has been fitted yet, but the surface size belongs in the log before the deflated
   Sharpe is computed.
-- 2026-07-31 — Adversary's warning on Phase 2 fold construction, recorded now so it is not
+- 2026-07-31 — The red team's warning on Phase 2 fold construction, recorded now so it is not
   rediscovered later: 32% of INTC event-clock stamps sit within 0.5ms of the previous stamp
   and carry rho 0.437 against 0.19 for isolated stamps. If Phase 2 cuts folds on STAMP INDEX
   rather than wall clock, a single burst can straddle a boundary and both folds will contain
@@ -303,7 +303,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
 
 - 2026-07-31 — Folds are cut on WALL-CLOCK TIME, not stamp index, and the universe is one
   trading day so EVAL_PROTOCOL.md sec. 1's "split on day boundaries first" is impossible;
-  folds are intraday blocks. Time-cutting is the phase-1 adversary's explicit warning: 32% of
+  folds are intraday blocks. Time-cutting is the phase-1 red team's explicit warning: 32% of
   INTC event-clock stamps sit within 0.5ms of the previous one and carry ~2.3x the
   correlation of isolated stamps, so an index cut lets one burst land on both sides of a
   boundary and both folds then hold the same episode — which reads as optimism and is really
@@ -333,7 +333,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   honest price of a causal fit), which is reported rather than hidden.
 - 2026-07-31 — `tr_aggr_imb_1s` dropped from the L3/L4 feature set. It is a RATIO and is NaN
   whenever its window holds no trades: 84.7% of INTC calendar stamps, 86.5% of AMZN's (the
-  phase-1 adversary's F6, measured). Keeping it would have cost 87% of the sample for one
+  phase-1 red team's F6, measured). Keeping it would have cost 87% of the sample for one
   column. `tr_signed_vol_1s` and `tr_count_1s` are SUMS, legitimately 0.0 on a quiet window
   (INTERFACE.md sec. 7), and carry the same directional information unnormalised. Chosen on
   the NaN structure of the columns before any fold was scored, not because it improved a
@@ -387,7 +387,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
 
 - 2026-08-02 — **The headline break-even column is now computed on the GROSS series, not the
   net one.** The old column was incremental to a spread already crossed and a fee already
-  paid, which made it very nearly model-invariant: the adversary showed a constant always-long
+  paid, which made it very nearly model-invariant: the red team showed a constant always-long
   predictor scores -0.8072 ticks on INTC calendar 1s against a whole-ladder range of
   [-0.8025, -0.7702], i.e. *inside* it, and that perfect foresight of the 1s mid sign still
   loses $456. A column a constant cannot be distinguished from cannot answer PLAN.md's
@@ -398,7 +398,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   correction instead of recording it.
 - 2026-08-02 — **The constant and oracle controls ship as rows in the table.** always-long,
   always-short, and perfect foresight run on the same rows, folds, mask and fills as the
-  ladder. The adversary had to compute them to find the model-invariance; a reader should not
+  ladder. The red team had to compute them to find the model-invariance; a reader should not
   have to. The oracle is labelled a BOUND, not a rung — it reads the future by construction
   and its feature list says so.
 - 2026-08-02 — **The deflated Sharpe is reported on the gross series.** On the net series
@@ -629,7 +629,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   probed first; the older candidates stay in the list and simply fall through when absent. The
   full suite passes on it unchanged (400 tests, 594 subtests) under Python 3.14 and numpy 2.5.1
   against the 3.12/numpy-1.x it was written on, which is a free clean-room check of the
-  zero-dependency claim. `.venv-edge/` and the adversary's `scratch/` are gitignored.
+  zero-dependency claim. `.venv-edge/` and the red team's `scratch/` are gitignored.
 
 ## Phase 2 after the 2026-08-03 fourth red team (`SURVIVED WITH CAVEATS`)
 

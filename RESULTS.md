@@ -226,7 +226,7 @@ it, and **nothing in this study rests on it**.
 ### Phase 1 substantive finding — the flagged correlations are real, and short
 
 The correlation report flags 446 feature/label pairs above \|ρ\| = 0.15 at the 1s horizon
-(282 INTC, 164 AMZN). Adversary verdict `SURVIVED WITH CAVEATS`: genuine microstructure,
+(282 INTC, 164 AMZN). Red-team verdict `SURVIVED WITH CAVEATS`: genuine microstructure,
 **correctly measured, reported on the wrong axis**.
 
 - **Not leakage** — six independent executable checks above.
@@ -251,7 +251,7 @@ wrong and the deflated Sharpe is a lie.
 | 2 | 2026-07-31 | Univariate correlation triage, 7,264 (feature × label) cells | triage only, explicitly not a result; 480 pairs self-flagged | yes (as triage) |
 | 3 | 2026-07-31 | Deadband α sweep, 5 points {0, 0.25, 0.5, 1, 2} | reported for sensitivity; α frozen at 0.5 BY RULE, not by this sweep | frozen a priori |
 | 4 | 2026-07-31 | OFI self-check regressions, 52 (13 regressors × 4 ticker/clock) | PASS | yes |
-| 5 | 2026-07-31 | Ladder grid: 2 tickers × 2 clocks × 4 horizons × 3 protocols × 6 rungs = **288 fits** | the optimism table | pending adversary |
+| 5 | 2026-07-31 | Ladder grid: 2 tickers × 2 clocks × 4 horizons × 3 protocols × 6 rungs = **288 fits** | the optimism table | pending red team |
 | 6 | 2026-07-31 | L3/L4 feature set: dropped `tr_aggr_imb_1s` before scoring any fold | recovered 87% of rows; chosen on NaN structure, not on a result | yes |
 | 7 | 2026-07-31 | Protocol A test universe restricted to match B/C (first attempt tested the market open A-only) | discarded, re-run | no — superseded |
 | 8 | 2026-07-31 | Per-rung row masks replaced by a common mask (first attempt scored L3/L4 on 4,576 rows vs L1/L2's 39,000) | discarded, re-run | no — superseded |

@@ -157,7 +157,7 @@ floors as bounds, and the L1m/L2 entries of the AUC ladder.
     "under the correct protocol every rung is UNDER-confident": L2's median-aggregated C slope
     is 0.7991.
 
-## Additional experiments from the brief
+## Additional experiments
 
 - **Reproduction of the artifacts.** I recomputed the AUC and calibration tables from the
   parquet files with my own driver and reproduce `reports/ladder.md` exactly: L4 per-cell A−C

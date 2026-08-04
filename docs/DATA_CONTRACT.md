@@ -115,7 +115,7 @@ during this pass (median mid = `(ask_px_1 + bid_px_1) / 2 / 10000`, full trading
 | INTC | 27.02 | 26.62 – 27.60 | [20, 35] |
 | AMZN | 222.66 | 220.52 – 226.03 | [200, 250] |
 
-Both inside the sanity bounds specified in the phase brief — confirms `/10000` is the
+Both inside the sanity bounds the phase-0 spec sets — confirms `/10000` is the
 correct scaling, not `/100` or `/1000`. The output frame keeps prices in raw integer units
 (int64); the `/10000` conversion to dollars is a display/feature-time operation, done
 downstream, never baked into the stored frame.

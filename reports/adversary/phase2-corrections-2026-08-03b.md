@@ -7,7 +7,7 @@ Reviewed: `reports/{ladder,artifact_floor,costs}.md`, `RESULTS.md`, `FINDINGS.md
 `src/edge/harness/{run,floors,models,metrics,splits}.py`, `src/edge/costs/run.py`,
 `tests/test_score_fold.py`, `tests/test_pnl.py`. Read-only on `src/`, `tests/` and every `.md`
 except this file. Everything below was run with `PYTHONPATH=src .venv-edge/bin/python3`
-(3.14.5 / numpy 2.5.1 / lightgbm 4.7.0); scripts in `scratch/adv4/`.
+(3.14.5 / numpy 2.5.1 / lightgbm 4.7.0); scripts in `scratch/redteam/`.
 
 **The corrections are real and the surviving headline is not wrong.** I rebuilt the pipeline
 with my own driver and reproduce `A' - C` = +0.1379 (L4) and +0.0542 (L3) on R2, +0.1371 and
@@ -23,7 +23,7 @@ statement.
 
 ---
 
-## The eight items I was asked to attack
+## The eight lines of attack
 
 ### 1. Is the new floor like-for-like? Partly. It is not a bound, and the AUC version is measured at a ceiling.
 
@@ -33,7 +33,7 @@ construction, and no frozen predictor can bound it. I attacked it two ways.
 
 **(a) The floor depends on where the frozen model is fitted, and "the whole day" is the choice
 that minimises it.** Same construction, same per-fold scale refit, only the fit window moves
-(`scratch/adv4/floors2.py`, 16 cells x 3 magnitudes x 4 windows):
+(`scratch/redteam/floors2.py`, 16 cells x 3 magnitudes x 4 windows):
 
 | frozen at | fit window | R2 floor (med) | R2 floor (max cell) | raw-AUC floor (med) | raw-AUC floor (max cell) |
 |---|---|---|---|---|---|
@@ -63,7 +63,7 @@ margins in `RESULTS.md`, `FINDINGS.md` §1.1a and `README.md` are an artifact of
 So: L4 survives, at roughly **7x**, not 98x. L3's R2 margin is one cell away from nothing.
 L1 behaves exactly as a null control must. I also re-measured the floor with protocol A on the
 positional rule — the configuration `A' - C` is actually measured in — and it moves L4 by
-0.0002 and L3 by 0.0004, so that particular mismatch is immaterial (`scratch/adv4/floor_ap.py`).
+0.0002 and L3 by 0.0004, so that particular mismatch is immaterial (`scratch/redteam/floor_ap.py`).
 
 ### 2. The `A' - C` control. Not like-for-like, and "48% of the gap is the rule" is one of at least three answers.
 
@@ -73,7 +73,7 @@ calibration rule moves." **That is false for L3 and L4.** `Rung.fit` fits the ra
 model sees a random 80% of the day; under A' it sees the first 80% **in time** and never sees the
 day's tail. A' is a temporally handicapped model, not the same model.
 
-The 2x2 that settles it (medians over 16 cells; `scratch/adv4/run_main.py`):
+The 2x2 that settles it (medians over 16 cells; `scratch/redteam/run_main.py`):
 
 | L4 GBM | C on its own rule | C on A's random rule (`C'`) |
 |---|---|---|
@@ -87,7 +87,7 @@ one that flatters it, so the published `A - C` sits in the middle of a bracket
 
 A third rule-matched control isolates the mechanism. `A''` = protocol A with the calibration
 holdout as the **first** 20% in time, so the slice is contiguous and non-exchangeable exactly as
-under C, but the model keeps the day's tail (`scratch/adv4/headrule.py`):
+under C, but the model keeps the day's tail (`scratch/redteam/headrule.py`):
 
 | rung, median over 16 cells | `A - C` | `A' - C` (tail hold) | `A'' - C` (head hold) |
 |---|---|---|---|
@@ -160,7 +160,7 @@ numbers exactly. All 96 headline rows, 48 floor rows and the 96-row control tabl
 - **Aggregation choice.** L4 raw AUC: median-of-per-cell-gaps +0.1371, difference-of-medians
   +0.1440, ex-fold-0 +0.1273. L3: +0.0282 / +0.0149 / +0.0131. L4 is aggregation-invariant; L3
   loses half under two of the three.
-- **Standard probes, all pass** (`scratch/adv4/probes.py`, INTC cal 1s and AMZN event 5s):
+- **Standard probes, all pass** (`scratch/redteam/probes.py`, INTC cal 1s and AMZN event 5s):
   labels shuffled -> AUC 0.4951–0.5137 under both protocols, |gaps| <= 0.0077, R2 gaps <= 0.0005;
   features shifted +1 event -> L4 C R2 0.0213 -> 0.0703 and 0.1064 -> 0.1847, AUC 0.857 -> 0.884,
   so the leak probe fires through the identical code path; `A' - C` at k = 2/3/5/10 is smooth and
@@ -241,7 +241,7 @@ Defects found:
 
 ### 7. The tests. The new ones bite. The floor has no test at all.
 
-I mutated a copy of `src/` and ran the full suite each time (`scratch/adv4/mut.py`):
+I mutated a copy of `src/` and ran the full suite each time (`scratch/redteam/mut.py`):
 
 | mutation | result |
 |---|---|
@@ -284,7 +284,7 @@ three answers exist and the reported one is the smallest.
 ## The four standing items not covered above
 
 **Row alignment — CLEAN, verified from the raw CSVs with no `edge.*` import**
-(`scratch/adv4/align.py`, 30,000 messages each). Under "orderbook row *k* is the state **after**
+(`scratch/redteam/align.py`, 30,000 messages each). Under "orderbook row *k* is the state **after**
 message *k*": INTC 14,360 type-1 adds show the exact `+size` delta against 1,706 under the
 off-by-one convention; AMZN 5,469 against 196; type-3 deletions 13,373 and 5,235 correct with
 **0** mismatches.

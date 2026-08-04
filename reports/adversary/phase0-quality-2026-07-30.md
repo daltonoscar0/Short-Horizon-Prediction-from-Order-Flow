@@ -107,7 +107,7 @@ both tickers.
 
 ## crossed=0: recounted raw, no exclusions
 
-The brief asked whether the crossed-book test is computed over all rows or only some, and whether
+The open question was whether the crossed-book test is computed over all rows or only some, and whether
 sentinels/halts/pre-open rows are excluded in a way that could hide crossings.
 
 **Current code applies no mask at all.** `crossed_locked_counts(bid_px_1, ask_px_1)` is
@@ -125,7 +125,7 @@ bid strictly decreasing across all 10 levels): **0 violating rows on either tick
 invariant the report does not check but which the data satisfies anyway.
 
 **However — `git show 6692c9e:src/edge/io/quality.py` shows the *previous* version did exactly
-what the brief suspected:**
+what I suspected:**
 
 ```python
 valid = _valid_quote_mask(bid_px_1, ask_px_1, bid_sz_1, ask_sz_1)

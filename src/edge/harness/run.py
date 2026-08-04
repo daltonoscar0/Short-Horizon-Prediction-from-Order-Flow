@@ -956,7 +956,7 @@ def _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, 
     w("- **On AUC, quote the raw column.** The rescale is rank-preserving only up to sign and ")
     w("the fitted scale goes negative in 27 of 400 protocol-C folds, which sends AUC to ")
     w("1-AUC. That channel alone produced the unfitted rungs' apparent gaps.\n")
-    w("- **The 1s label is not one-second alpha.** The phase-1 adversary measured that OFI's ")
+    w("- **The 1s label is not one-second alpha.** The phase-1 red team measured that OFI's ")
     w("entire content decays inside 100 ms (rho 0.458 over the first 100 ms against 0.027 ")
     w("over the remaining 900 ms). Read these as short-horizon numbers.\n")
     w("- **Fold row counts vary by design.** Test blocks are equal in DURATION, not in ")

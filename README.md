@@ -188,7 +188,7 @@ all four tables (1,028 columns), zero mismatches, NaN placement included.
 | `docs/INTERFACE.md` | the frozen feature-module contract |
 | `reports/ladder.md` | the optimism table, per-fold detail, embargo sweep |
 | `reports/artifact_floor.md` | the frozen-predictor floor a gap must clear, per rung |
-| `reports/` | every generated table, including the adversary reports |
+| `reports/` | every generated table, including the red team reports |
 | `METHOD.md` | how the numbers were produced, in enough detail to attack |
 | `FINDINGS.md` | the claim, the evidence, and what would change my mind |
 | `FUTURE.md` | what this harness is for next, in priority order |

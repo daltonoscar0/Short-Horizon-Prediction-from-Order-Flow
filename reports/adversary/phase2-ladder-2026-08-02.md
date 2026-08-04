@@ -103,7 +103,7 @@ training rows, scale fit on the held-out last 20% (random 20% under A, which is 
 | INTC evt 1s | L3 | +0.0956 | 0.1503 | +0.0712 | 0.1747 |
 
 Every large negative protocol-C R2 in the report is an artifact of the in-sample scale, not a
-finding. This is the answer to the brief's question about the L4 GBM: **the C-protocol
+finding. This is the answer to the open question about the L4 GBM: **the C-protocol
 negative R2 is a calibration artifact.** The direction survives (C's IC is positive
 throughout), the amplitude does not. Between 20% and 95% of the reported gap disappears with
 a fix that touches neither the split nor the model.
@@ -121,7 +121,7 @@ are arithmetically reachable with no leakage whatsoever. Item 4 shows they in fa
 
 ## 6. The L1 control — THE MEASUREMENT IS NOT ZERO, AND THE REPORT'S READING OF IT IS WRONG
 
-This is the most important check in the project, per the brief, and it fails on its own terms.
+This is the most important check in the project and it fails on its own terms.
 
 `ladder.md` line 807: "L1 ... has no fitted parameters beyond a one-parameter rescale, so its
 `A-C` gap is a floor on what the harness itself contributes." The parenthetical is doing all
@@ -161,7 +161,7 @@ Consequences:
   every cell tested (`scratchpad/oracle_scale.py`).
 - `tests/test_splits.py::test_every_protocol_sees_the_same_sample_universe` asserts the *union*
   of test rows is identical across protocols. True, and insufficient: it says nothing about
-  the aggregation, which is where the artifact lives. This is the test the brief warned me
+  the aggregation, which is where the artifact lives. This is the test I had warned myself
   not to trust, and it does not cover the failure.
 - The floor is small in absolute R2 (~0.002-0.03), so the L4 headline is not destroyed by it.
   The claim survives; the stated justification for it does not.
@@ -227,7 +227,7 @@ calibration artifacts (item 4).
 
 ---
 
-## Additional experiments the brief asked for
+## Additional experiments
 
 **Labels shuffled within fold** (`scratchpad/probes.py`, INTC/event/1s). Every metric
 collapses under all three protocols: IC in [-0.009, +0.011] for every rung, R2 in

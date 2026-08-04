@@ -415,7 +415,7 @@ def _write(args, rows, dm_rows):
         w("it a choice informed by protocol-C output; it is logged in `DECISIONS.md` and the ")
         w("reasoning is a-priori, but it is disclosed here rather than presented as frozen.\n")
         w("- **Latency**: the signal formed at t acts at t+delta. A signal whose edge is gone ")
-        w("by 100ms is latency arbitrage, not alpha — and the phase-1 adversary measured that ")
+        w("by 100ms is latency arbitrage, not alpha — and the phase-1 red team measured that ")
         w("OFI's content decays inside 100ms, so the 100ms rung is expected to be brutal.\n\n")
         if args.trials <= 1:
             w("> **The deflated Sharpe below is undeflated.** `--trials 1` was passed, which ")

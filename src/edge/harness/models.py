@@ -28,7 +28,7 @@ NaN POLICY. INTERFACE.md sec. 7 puts the drop here, in the harness, per fold and
 never in the family modules -- because which rows are droppable depends on which columns a
 rung actually uses. L2 uses one OFI column and must not lose rows to a NaN in an L4-only
 column. Every fit reports `n_train`/`n_test` after dropping so the per-fold row counts are
-visible rather than absorbed (the phase-1 adversary's F6: `tr_aggr_imb_*` is finite on 1.8%
+visible rather than absorbed (the phase-1 red team's F6: `tr_aggr_imb_*` is finite on 1.8%
 of AMZN calendar stamps, so rungs using it will differ from rungs that do not by more than
 an order of magnitude).
 """

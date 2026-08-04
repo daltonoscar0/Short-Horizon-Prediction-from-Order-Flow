@@ -8,7 +8,7 @@ Reviewed: `src/edge/harness/{run,models,splits,metrics,floors}.py`, `src/edge/co
 `docs/spec/PLAN.md`, `Makefile`, and the two prior passes for context only. Read-only on `src/`,
 `tests/` and every `.md` but this one. Everything below run with
 `PYTHONPATH=src .venv-edge/bin/python3` (3.14 / numpy 2.5.1 / lightgbm); scripts in
-`scratch/adv5/`. Baseline suite: **429 passed**, as claimed.
+`scratch/redteam/`. Baseline suite: **429 passed**, as claimed.
 
 **The headline number is right and it is more robust than the report argues.** I reproduced
 `+0.1913` cell by cell with my own driver and my own AUC implementation, verified the raw-AUC
@@ -37,7 +37,7 @@ whose most important mutations pass 429 tests.
 **Verified.** `auc_raw = _directional_auc(y_te, rung._raw(X_all[te]))` and `_raw` is a pure
 function of the parameters fitted on `X[fit_rows], y[fit_rows]`. With `model_mask` independent of
 `holdout_rule`, `fit_rows` is byte-identical across arms, so raw AUC cannot move. Measured, not
-assumed (`scratch/adv5/identity.py`, 2 cells × 2 protocols × 5 rungs × 5 folds):
+assumed (`scratch/redteam/identity.py`, 2 cells × 2 protocols × 5 rungs × 5 folds):
 
 ```
 max |AUC_raw(random rule) - AUC_raw(positional rule)| = 0.000e+00   (every row)
@@ -59,7 +59,7 @@ the model-fit rule is a new free parameter, chosen after seeing that the old one
 `A′−C` was already model-fit-rule-*matched* (both arms fit the first 80% positional of their own
 training rows); it is the *headline* `A−C` that is rule-inconsistent (A's model gets a random 80%,
 C's a contiguous first 80%). So the commit does not remove a choice, it relocates it. I ran the
-sweep (`scratch/adv5/sweep16.py`, all 16 cells, 6 rules, L1/L3/L4, ~39 min):
+sweep (`scratch/redteam/sweep16.py`, all 16 cells, 6 rules, L1/L3/L4, ~39 min):
 
 | common model-fit rule | L4 median A−C raw AUC | mean | min cell | 16-cell positive |
 |---|---|---|---|---|
@@ -97,7 +97,7 @@ in-sample scale bias grows as the model's capacity per training row grows, and C
 on one side of every difference.
 
 Measured directly with a label-permutation null (training labels shuffled within fold, 8 seeds,
-INTC event 1s, L4 — `scratch/adv5/null2.py`):
+INTC event 1s, L4 — `scratch/redteam/null2.py`):
 
 | construction | shuffled-label null, raw-AUC gap | shuffled-label null, **R² gap** |
 |---|---|---|
@@ -119,7 +119,7 @@ further problems with it:
   0.0116 / 0.3173. That is the same class of metric mismatch this project has now made twice.
 - **It is at its own null.** The identical statistic for rungs with nothing to fit: L1 +0.0046,
   L1m +0.0022, L2 +0.0066 (medians, from `ladder.md`), and a constant +1 predictor I inserted
-  scores **+0.0082** on INTC event 1s (`scratch/adv5/nullgap.py`). L4's 0.0116 is within a factor
+  scores **+0.0082** on INTC event 1s (`scratch/redteam/nullgap.py`). L4's 0.0116 is within a factor
   of 1.5–2 of a predictor with no information. "The rule is worth 4%" should be withdrawn and
   replaced with "on R² the rule is not distinguishable from the null for this statistic".
 - Separately, `ladder.md`'s "**their spread is what the calibration rule is worth**" is wrong as
@@ -164,7 +164,7 @@ right, and is right for a reason the report does not give.**
   medians* (0.1913/0.0198 = 9.7; 0.0409/0.0019 = 21.5). The **median of per-cell ratios** is
   **8.06×** (L4, min cell 3.42×) and **12.50×** (L3, min cell 7.32×) — recomputed from
   `artifact_floor.md`'s own `max`-over-fit-windows column, cell by cell
-  (`scratch/adv5/floors.py`). The previous pass flagged exactly this ("48% is a median of ratios,
+  (`scratch/redteam/floors.py`). The previous pass flagged exactly this ("48% is a median of ratios,
   56.5% a ratio of medians, and they sit in the same row"); it has recurred. The min-cell *ratio*
   has also been silently replaced by a min-cell *absolute margin* ("min cell +0.0657"), which is
   the weaker statement dressed as the stronger one.
@@ -191,7 +191,7 @@ loop variable `rule` appears only in the error message. They cannot fail for any
 implementation. The end-to-end test builds `self._fold("A")` twice, so it cannot see protocol
 dependence either.
 
-Mutation battery against a copy of `src/`, full 429-test suite each time (`scratch/adv5/mut.py`):
+Mutation battery against a copy of `src/`, full 429-test suite each time (`scratch/redteam/mut.py`):
 
 | mutation | result |
 |---|---|
@@ -215,7 +215,7 @@ protocol A only, which is why the protocol-dependence mutation escapes. One asse
 
 ## 7. Documentation vs artifacts. Every quoted number reproduces; two withdrawn claims still stand
 
-Reproduced from `reports/ladder.md` by re-parsing the tables (`scratch/adv5/parse_ladder.py`):
+Reproduced from `reports/ladder.md` by re-parsing the tables (`scratch/redteam/parse_ladder.py`):
 clean split-only medians L4 **+0.1913** (mean +0.1864, min +0.0657, max +0.3132, 16/16 positive),
 L3 **+0.0409**, L1 **+0.0023** (13/16), L1m −0.0018, L2 −0.0002; R² rule spreads L4 **0.0116**,
 L3 **0.0784**; uncontrolled +0.1740 / +0.0409 / +0.0022; `A′−C` +0.1371 / +0.0283. `costs.md`
@@ -245,7 +245,7 @@ Defects:
 4. **L3's per-fold caveat is attributed to the superseded arm and is not true of the reported
    one.** `RESULTS.md`/`FINDINGS.md`: "on the confounded `A′` arm its gap was positive in only 55
    of 80 protocol-C folds and halved when fold 0 was dropped, where L4's was positive in 79 of
-   80". Recomputed on the **clean** arm (`scratch/adv5/analyse.py`, fold-paired, 80 folds):
+   80". Recomputed on the **clean** arm (`scratch/redteam/analyse.py`, fold-paired, 80 folds):
    **L3 55/80 positive, median +0.0177, worst −0.0829, ex-fold-0 39/64 and median +0.0120** —
    identical weakness. L4 on the clean arm is **80/80, median +0.1986, worst +0.0157, ex-fold-0
    64/64**, i.e. *better* than the arm it replaced. Both facts should be in the report and neither
@@ -284,7 +284,7 @@ and loop headers. Features, seed, hyperparameters, metric code and the usable-ro
 `common_usable_mask` is computed once per cell and applied identically.
 
 **Row alignment — CLEAN, verified from the raw CSVs with no `edge.*` import**
-(`scratch/adv5/align.py`, 40,000 messages per name). Under "orderbook row *k* is the state
+(`scratch/redteam/align.py`, 40,000 messages per name). Under "orderbook row *k* is the state
 **after** message *k*": INTC 19,677 type-1 adds reproduce the exact `+size` depth delta with **0**
 mismatches (1,985 under the off-by-one convention); 18,008 type-3 deletions, 0 mismatches (1,731).
 AMZN 19,603 / 0 (334) and 18,598 / 0 (224).
@@ -309,7 +309,7 @@ it independently (Mann–Whitney with tie-averaged ranks) and reproduce their va
 `labels.py`, sourced to `FEATURES.md` §7, a day before any phase-2 number. The phase-3 *trading*
 deadband of 0 ticks was set after seeing protocol-C output and is disclosed as such.
 
-**Standard probes, all pass on the decoupled path** (`scratch/adv5/probes.py`, INTC event 1s):
+**Standard probes, all pass on the decoupled path** (`scratch/redteam/probes.py`, INTC event 1s):
 labels shuffled → L4 raw AUC 0.5092 (A) / 0.4825 (C), L1 unchanged as it must be; constant `+1`
 predictor → raw AUC exactly 0.5000 in all four arms, gaps vanish; `A−C` at k = 2/3/5/10 →
 AUC +0.0650 / +0.0674 / +0.0678 / +0.0676 and R² +0.4604 / +0.4811 / +0.4896 / +0.4949 — smooth

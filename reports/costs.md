@@ -10,7 +10,7 @@
 - **Fees**: $0.0030/share to take, $0.0020/share make rebate — the commonly-quoted 2012 Nasdaq standard rates, entered as an ASSUMPTION and *not* verified against an archived price list. The break-even table is the answer to anyone who disagrees: it reports the cost at which PnL crosses zero, so a reader can substitute their own.
 - **No market impact model.** Stated, not omitted. Ignoring impact biases PnL UPWARD; the break-even table partially absorbs this.
 - **Position**: single unit of 100 shares, no inventory, flat at the horizon. Direction is the SIGN of the prediction — **the deadband is 0**, not the labels' 0.5 ticks. A scaled sign predictor cannot emit a magnitude above half a tick at these horizons, so a 0.5-tick trading threshold took zero trades on every unfitted rung. That change was made after seeing an empty table, which makes it a choice informed by protocol-C output; it is logged in `DECISIONS.md` and the reasoning is a-priori, but it is disclosed here rather than presented as frozen.
-- **Latency**: the signal formed at t acts at t+delta. A signal whose edge is gone by 100ms is latency arbitrage, not alpha — and the phase-1 adversary measured that OFI's content decays inside 100ms, so the 100ms rung is expected to be brutal.
+- **Latency**: the signal formed at t acts at t+delta. A signal whose edge is gone by 100ms is latency arbitrage, not alpha — and the phase-1 red team measured that OFI's content decays inside 100ms, so the 100ms rung is expected to be brutal.
 
 ## What the headline column is, and what it is not
 
