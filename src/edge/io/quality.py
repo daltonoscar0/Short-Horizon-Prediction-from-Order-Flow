@@ -608,7 +608,7 @@ def main(argv=None):
     parser.add_argument("--raw", required=True, help="directory of raw LOBSTER message/orderbook CSVs")
     parser.add_argument("--frames", required=True, help="directory of {TICKER}_{DATE}.parquet frames")
     parser.add_argument("--out", required=True, help="output path for the markdown report")
-    parser.add_argument("--seed", type=int, default=0)  # every entry point takes --seed, per CLAUDE.md
+    parser.add_argument("--seed", type=int, default=0)  # every entry point takes --seed, per RULES.md
     args = parser.parse_args(argv)
 
     print(f"seed={args.seed} (deterministic step, no randomness consumed)")

@@ -77,7 +77,7 @@ is what the harness was built to make possible.
 
 ## What I'd want you to poke at
 
-- Nine red-team passes are in `reports/adversary/`, run read-only with fresh context, and
+- Eleven red-team passes are in `reports/adversary/`, run read-only against the artifacts, and
   **three of them killed a headline this project had already written down**. The phase-3 pass
   showed the original break-even column was model-invariant — a constant always-long predictor
   scored *inside* the ladder's range on it. The phase-2 passes showed that an in-sample

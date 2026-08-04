@@ -186,7 +186,7 @@ remaining power to detect anything.
 
 ## `DECISIONS.md` describes code that is not there
 
-`CLAUDE.md` makes `DECISIONS.md` the auditable record of the study. Two of its phase-0 entries are
+`RULES.md` makes `DECISIONS.md` the auditable record of the study. Two of its phase-0 entries are
 false of the shipped `quality.py`:
 
 1. *"It hard-fails (`SystemExit`) if crossed-book count != 0 **or median mid falls outside the

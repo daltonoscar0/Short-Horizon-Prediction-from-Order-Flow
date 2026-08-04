@@ -1,7 +1,7 @@
 VERDICT: SURVIVED WITH CAVEATS
 
 Target: the phase-0 alignment invariant ("orderbook row k is the book state AFTER message k")
-and `tests/test_alignment.py`. Adversary run 2026-07-30, fresh context, read-only on `src/`,
+and `tests/test_alignment.py`. Red-team pass 2026-07-30, read-only on `src/`,
 `tests/`, `RESULTS.md`. All numbers below were produced by throwaway scripts in `/tmp/edge_adv/`
 that share no code with the test under attack.
 
@@ -181,7 +181,7 @@ Process checks: `tests/test_alignment.py` was committed in c8315a5 (20:31) as a 
 `src/edge/io/lobster.py` in c73710b (20:50), and the test file is byte-identical to its first
 commit with no working-tree modifications — it was not weakened after seeing the implementation.
 `tests/test_quality.py` (7ad99b4) landed *after* `quality.py` (6692c9e), a minor deviation from
-CLAUDE.md rule 2 if that rule is read as covering more than the CV harness.
+RULES.md rule 2 if that rule is read as covering more than the CV harness.
 
 ## Most likely remaining explanation that is not "the signal is real"
 
@@ -207,8 +207,8 @@ it is the class of error that survives everything done so far.
   Wayback snapshot of 2024-04-27, which is a mirror, not the live page — I cannot rule out that
   the live page has since changed, though a change to the k-th-row sentence would be a change to
   the format itself.
-- **Whether the implementing agent's environment could actually reach web.archive.org.** I only
-  know that plain `curl` reaches it from this machine today. If the agent's fetch tool was
+- **Whether the environment used at the time could actually reach web.archive.org.** I only
+  know that plain `curl` reaches it from this machine today. If the fetch used at the time was
   sandboxed differently, "archive blocked" may have been true of its tooling and false of the
   machine. The defect is that the claim was recorded as a property of the environment without
   the command that produced it.

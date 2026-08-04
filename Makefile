@@ -66,7 +66,7 @@ selfcheck:
 # columns so the size of the 2026-08-02 correction is visible rather than asserted, and the
 # calibration-rule control. `--holdout-control` is NOT optional here: the headline `A' - C`
 # numbers come from the table it emits, and for one revision this target regenerated the report
-# without it -- a published command that did not reproduce the published report (CLAUDE.md
+# without it -- a published command that did not reproduce the published report (RULES.md
 # rule 7, caught by the fourth red team).
 ladder:
 	$(PYTHON) -m edge.harness.run --features $(FEATURES_OUT) --out $(LADDER_REPORT) \

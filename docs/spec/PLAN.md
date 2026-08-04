@@ -142,7 +142,7 @@ was cut for want of a checkpoint. The study is written up in `FINDINGS.md`, `REA
 - Trials logged: **984** (288 ladder + 480 embargo sweep + 216 cost configurations), which
   deliberately over-counts. See the `RESULTS.md` trial log, including the two discarded
   harness configurations that invalidated their own runs.
-- Adversary passes: 9, all in `reports/adversary/`. Three of them killed a headline this repo
+- Red-team passes: 11, all in `reports/adversary/`. Three of them killed a headline this repo
   had already written down.
 
 **Closed out again 2026-08-03**, after two more `VERDICT: KILLED` passes. The second phase-2

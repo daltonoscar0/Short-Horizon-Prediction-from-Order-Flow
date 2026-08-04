@@ -1,6 +1,6 @@
 """The clean calibration control: hold the MODEL's fit rows fixed, move only the scale rows.
 
-Written before the code it constrains (CLAUDE.md rule 2).
+Written before the code it constrains (RULES.md rule 2).
 
 WHY IT EXISTS. `A' - C` was supposed to isolate the calibration rule's contribution to the
 A-versus-C gap. It cannot, and the 2026-08-03 fourth red team showed why: `Rung.fit` fits the

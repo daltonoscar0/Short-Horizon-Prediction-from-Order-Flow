@@ -1,6 +1,6 @@
 VERDICT: SURVIVED WITH CAVEATS
 
-# Phase 2 red team, fourth pass (fresh context) — the 2026-08-03 corrections
+# Phase 2 red team, fourth pass — the 2026-08-03 corrections
 
 Reviewed: `reports/{ladder,artifact_floor,costs}.md`, `RESULTS.md`, `FINDINGS.md`, `README.md`,
 `METHOD.md`, `INTERVIEW.md`, `DECISIONS.md`, `docs/spec/PLAN.md`, `Makefile`,
@@ -156,7 +156,7 @@ numbers exactly. All 96 headline rows, 48 floor rows and the 96-row control tabl
   **−0.0174**, −0.0032, and dropping fold 0 halves it (+0.0282 -> +0.0131). **L3's AUC gap is a
   small-training-fold story.** The reports quote "16 / 16 cells" for both rungs, which hides
   that difference, and there is no per-fold or worst-fold column for `AUC raw` anywhere —
-  a CLAUDE.md rule 4 miss on the number the report says to quote.
+  a RULES.md rule 4 miss on the number the report says to quote.
 - **Aggregation choice.** L4 raw AUC: median-of-per-cell-gaps +0.1371, difference-of-medians
   +0.1440, ex-fold-0 +0.1273. L3: +0.0282 / +0.0149 / +0.0131. L4 is aggregation-invariant; L3
   loses half under two of the three.
@@ -228,7 +228,7 @@ Defects found:
 1. **The published reproduce command does not reproduce the published report.** `ladder.md`'s own
    header correctly echoes `--holdout-control`, but `make ladder`, `README.md` and `METHOD.md`
    all spell the command **without** it. Running any of the three regenerates `ladder.md`
-   *minus the control table that the headline `A' - C` numbers come from*. CLAUDE.md rule 7.
+   *minus the control table that the headline `A' - C` numbers come from*. RULES.md rule 7.
 2. `README.md` says `make test # 392 tests`; the suite is **400** (`DECISIONS.md` says 400).
 3. The stale phase-3 numbers in §5 above.
 4. "48%" and "15%" are medians of per-cell ratios, while "+0.3173 -> +0.1379" is a ratio of

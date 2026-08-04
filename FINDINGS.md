@@ -401,7 +401,7 @@ fill model.
 
 ## 3. What the red team changed
 
-Seven adversary passes ran against artifacts with fresh context and read-only access
+Eleven red-team passes ran against the artifacts, read-only
 (`reports/adversary/`). The ones that changed a reported number:
 
 - **The large negative protocol-C R² was a calibration artifact, not a finding.** The

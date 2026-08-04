@@ -1,7 +1,7 @@
 """The three-protocol splitter (EVAL_PROTOCOL.md sec. 1). Hand-written; no sklearn.
 
 Adversarial tests for this module were written BEFORE it existed (tests/test_splits.py,
-CLAUDE.md rule 2) and include a deliberately broken splitter that the leak detector is
+RULES.md rule 2) and include a deliberately broken splitter that the leak detector is
 asserted to catch.
 
 TEST BLOCKS ARE CUT ON WALL-CLOCK TIME, NOT STAMP INDEX. The phase-1 adversary measured that

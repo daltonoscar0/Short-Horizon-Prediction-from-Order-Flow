@@ -135,7 +135,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Build validated event frames from raw LOBSTER CSVs.")
     parser.add_argument("--raw", required=True, help="directory of raw LOBSTER message/orderbook CSVs")
     parser.add_argument("--out", required=True, help="output directory for {TICKER}_{DATE}.parquet")
-    parser.add_argument("--seed", type=int, default=0)  # every entry point takes --seed, per CLAUDE.md
+    parser.add_argument("--seed", type=int, default=0)  # every entry point takes --seed, per RULES.md
     args = parser.parse_args(argv)
 
     print(f"seed={args.seed} (deterministic step, no randomness consumed)")

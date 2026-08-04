@@ -1,6 +1,6 @@
 VERDICT: KILLED
 
-# Phase 2 red team (third pass, fresh context) — the 2026-08-03 metrics
+# Phase 2 red team (third pass) — the 2026-08-03 metrics
 
 Reviewed: `reports/ladder.md`, `reports/artifact_floor.md`, `RESULTS.md` (2026-08-03 section,
 leakage-diagnostic rows, trials 18-19), `FINDINGS.md` §1.1a/§1.3, `README.md`, `METHOD.md` §6,

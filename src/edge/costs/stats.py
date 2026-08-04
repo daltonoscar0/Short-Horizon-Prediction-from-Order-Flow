@@ -7,7 +7,7 @@ Hand-written on numpy: no scipy, no statsmodels. The three tools:
   * block bootstrap CIs on metric DIFFERENCES, block length >= the label horizon;
   * the deflated Sharpe ratio, using the logged trial count.
 
-The deflated Sharpe is the reason CLAUDE.md rule 4 makes the trial log mandatory and requires
+The deflated Sharpe is the reason RULES.md rule 4 makes the trial log mandatory and requires
 logging the failures too. A Sharpe selected as the best of N tries is biased upward by an
 amount that grows with N; deflating without an honest N is worse than not deflating, because
 it launders the selection through a formula that looks rigorous.

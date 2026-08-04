@@ -18,7 +18,7 @@ stamp t", not "same interval as the label" -- the OFI window (t-1s, t] and the l
 harder bar than CKS's own same-window regression.
 
 Every OLS + Newey-West HAC estimator below is hand-written on numpy only (no scipy, no
-sklearn, no statsmodels -- CLAUDE.md's dependency rule): a 2-column design matrix
+sklearn, no statsmodels -- RULES.md's dependency rule): a 2-column design matrix
 `[1, x]`, closed-form `beta = (X'X)^{-1} X'y`, and the Bartlett-kernel sandwich
 `(X'X)^{-1} S_hat (X'X)^{-1}` for the HAC covariance. Rows are dropped PAIRWISE per (x, y)
 regression -- a NaN in one regressor (e.g. `ofi_integrated_1s`'s block-0 warmup) must not
@@ -591,7 +591,7 @@ def evaluate_gate(rows, ratio_notes):
 
 
 def _caveats(rows):
-    """Honest caveats worth surfacing even when the gate passes (CLAUDE.md rule 3: propose
+    """Honest caveats worth surfacing even when the gate passes (RULES.md rule 3: propose
     the boring explanation, flag anything surprising) -- marginal significance, weak level
     decay, a deep-book slope that is directionally smaller but not itself significant."""
     notes = []
@@ -626,7 +626,7 @@ def main(argv=None):
     parser.add_argument("--raw", default="data/raw/lobster", help="directory of raw LOBSTER CSVs")
     parser.add_argument("--out", default="reports/ofi_selfcheck.md", help="output report path")
     parser.add_argument("--date", default=DATE)
-    parser.add_argument("--seed", type=int, default=0)  # deterministic step; logged only, per CLAUDE.md
+    parser.add_argument("--seed", type=int, default=0)  # deterministic step; logged only, per RULES.md
     args = parser.parse_args(argv)
 
     print(f"seed={args.seed} (deterministic step, no randomness consumed)")

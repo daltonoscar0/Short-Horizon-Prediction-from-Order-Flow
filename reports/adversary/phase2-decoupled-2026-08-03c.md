@@ -1,6 +1,6 @@
 VERDICT: SURVIVED WITH CAVEATS
 
-# Phase 2 red team, fifth pass (fresh context) — the decoupled calibration control (06802c5)
+# Phase 2 red team, fifth pass — the decoupled calibration control (06802c5)
 
 Reviewed: `src/edge/harness/{run,models,splits,metrics,floors}.py`, `src/edge/costs/run.py`,
 `tests/test_decoupled_control.py`, `reports/{ladder,artifact_floor,costs}.md`, `RESULTS.md`,
@@ -250,7 +250,7 @@ Defects:
    identical weakness. L4 on the clean arm is **80/80, median +0.1986, worst +0.0157, ex-fold-0
    64/64**, i.e. *better* than the arm it replaced. Both facts should be in the report and neither
    is: there is **no per-fold distribution and no worst fold anywhere for the new headline**
-   (CLAUDE.md rule 4), which is the third consecutive pass to say so.
+   (RULES.md rule 4), which is the third consecutive pass to say so.
 5. `INTERVIEW.md` puts "+0.1913 (raw AUC)" as the last column of a table headed "Median R² vs zero
    across 96 cells". It is labelled, but it invites a misread of a rank metric as an R².
 6. `FINDINGS.md`'s L3 row reads "+0.0409 | +0.0283 | **+0.0409**", which reads as "the clean

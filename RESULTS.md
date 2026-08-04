@@ -290,7 +290,7 @@ rule, never selected anything); it is counted anyway, because undercounting is t
 that makes a deflated Sharpe dishonest and overcounting only makes the threshold harder to
 clear. Historical note — the earlier figure was **288** for the ladder grid proper, plus trials 1–4
 above as pre-registered diagnostics rather than model selection. Trials 7 and 8 are *discarded
-harness configurations*, logged because CLAUDE.md rule 4 requires the failures too — both were
+harness configurations*, logged because RULES.md rule 4 requires the failures too — both were
 found by reading per-fold row counts, both invalidated their runs, and neither contributed a
 number to any table. Any deflated Sharpe computed at `--trials 1` is undeflated and the report
 says so on its face.
@@ -305,6 +305,6 @@ says so on its face.
 | refit schedule | 30 min, fit on strictly-prior rows | 2026-07-31 | `REFIT_BLOCK_NS`; matches `TOD_BUCKET_NS` so the seasonality control and refit grid align. Block 0 is NaN. |
 | embargo E | `max(60s, 10·h)` | 2026-07-31 | `EVAL_PROTOCOL.md` sec. 1's own default, taken as a rule rather than chosen. `edge.harness.default_embargo_ns`. Sensitivity swept over E ∈ {0, 1s, 10s, 60s, 300s} in `reports/ladder.md` and reported; the frozen value was never selected by comparing sweep rows. |
 | k for protocol A | 5, equal to `N_FOLDS` | 2026-07-31 | `K_SHUFFLED`. Deliberately equal to the walk-forward fold count so an A−C gap cannot be partly a difference in the number of training rows. |
-| trading deadband (phase 3) | 0 ticks | 2026-07-31 | **Not frozen a priori — disclosed.** The first cost run reused the labels' 0.5-tick deadband and every unfitted rung took zero trades, leaving the break-even table empty for L1, the baseline the project exists to test. The reasoning for 0 is a-priori (a scaled sign predictor cannot emit a magnitude above half a tick at these horizons) but the change was made after seeing protocol-C output, which is CLAUDE.md rule 5 territory. Recorded as informed-by-output rather than presented as clean. |
+| trading deadband (phase 3) | 0 ticks | 2026-07-31 | **Not frozen a priori — disclosed.** The first cost run reused the labels' 0.5-tick deadband and every unfitted rung took zero trades, leaving the break-even table empty for L1, the baseline the project exists to test. The reasoning for 0 is a-priori (a scaled sign predictor cannot emit a magnitude above half a tick at these horizons) but the change was made after seeing protocol-C output, which is RULES.md rule 5 territory. Recorded as informed-by-output rather than presented as clean. |
 | latency ladder Δ | {1ms, 10ms, 100ms} | 2026-07-31 | `EVAL_PROTOCOL.md` sec. 3 names these three exactly. `edge.costs.LATENCIES_NS`. |
 | GBM hyperparameters | 200 rounds, lr 0.05, 31 leaves, min 200/leaf, L2 1.0, no early stopping | 2026-07-31 | Frozen a priori. Early stopping on a slice of the test fold is itself a leak; carving a validation slice out of training is one more free parameter to log. Identical count under all three protocols. |

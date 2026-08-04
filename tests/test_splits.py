@@ -1,6 +1,6 @@
 """Adversarial tests for the three-protocol splitter, WRITTEN BEFORE THE SPLITTER.
 
-CLAUDE.md rule 2: "a splitter that lets a labelled sample straddle a fold boundary must
+RULES.md rule 2: "a splitter that lets a labelled sample straddle a fold boundary must
 fail a test that exists before the splitter." This file is that test, plus the rest of the
 invariants that separate protocol C from B and B from A.
 
@@ -35,7 +35,7 @@ def _uniform_stamps(n=1000, step_ns=100_000_000, start=0):
 def assert_no_label_leak(case, folds, ts_ns, horizon_ns):
     """No training sample's label window [t, t+h] may touch its fold's test block.
 
-    This is the invariant CLAUDE.md rule 2 demands. Returns the number of violating
+    This is the invariant RULES.md rule 2 demands. Returns the number of violating
     (fold, sample) pairs so a caller can also assert a protocol DOES leak.
     """
     violations = 0

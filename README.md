@@ -109,6 +109,16 @@ Full tables: [`reports/ladder.md`](reports/ladder.md),
 [`reports/costs.md`](reports/costs.md). The argument, the failure modes and "what would change
 my mind": [`FINDINGS.md`](FINDINGS.md).
 
+| | |
+|---|---|
+| [`FINDINGS.md`](FINDINGS.md) | the claim, the evidence, the failure modes, what would change my mind |
+| [`METHOD.md`](METHOD.md) | how every number was produced, in enough detail to attack |
+| [`RESULTS.md`](RESULTS.md) | every table, the leakage diagnostics, the full trial log |
+| [`RULES.md`](RULES.md) | the working discipline, numbered — the rest of the repo cites it |
+| [`DECISIONS.md`](DECISIONS.md) | every choice made without deliberating, dated, including the wrong ones |
+| [`FUTURE.md`](FUTURE.md) | what this harness is for next, ordered by what would change a conclusion |
+| [`reports/adversary/`](reports/adversary/) | eleven red-team passes; three killed a headline |
+
 ## Reproduce
 
 ```bash
@@ -149,8 +159,8 @@ all four tables (1,028 columns), zero mismatches, NaN placement included.
   before the splitter and contains a deliberately broken splitter that the leak detector is
   asserted to catch — a leak detector that has never caught a leak is a comment. The same
   pattern is used for the fold-boundary position-overlap bug found in phase 3.
-- **Nine red-team passes** in [`reports/adversary/`](reports/adversary/), run with fresh
-  context and read-only access. They changed the code every time, and three times they killed a
+- **Eleven red-team passes** in [`reports/adversary/`](reports/adversary/), run read-only
+  against the artifacts. They changed the code every time, and three times they killed a
   headline this repo had already written down: the phase-3 pass demoted the break-even column
   after showing a constant predictor scored *inside* the ladder's range on it; the second
   phase-2 pass showed that an in-sample calibration — not leakage — produced every large

@@ -1,6 +1,6 @@
 VERDICT: KILLED
 
-# Phase 2 red team (second pass, fresh context) — the three-protocol optimism table
+# Phase 2 red team (second pass) — the three-protocol optimism table
 
 Reviewed: `reports/ladder.md` (mtime 13:20), `RESULTS.md`, `FINDINGS.md` (mtime 13:55),
 `src/edge/harness/`. Read-only on `src/`, `tests/`, `RESULTS.md`. All commands below were run

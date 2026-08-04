@@ -3,7 +3,7 @@
 Frozen schemas for the LOBSTER adapter (`src/edge/io/lobster.py`). This is Phase 0 step 1:
 the schemas below are the target the adapter must satisfy (`tests/test_lobster.py`,
 `tests/test_alignment.py`); the adapter itself is written in a later step (tests-first, per
-`CLAUDE.md`).
+`RULES.md`).
 
 ## Raw input: LOBSTER message file
 
@@ -158,7 +158,7 @@ output schema. `L = 10` for this universe (free-sample depth).
 - CLI: `python3 -m edge.io.lobster --raw RAW_DIR --out OUT_DIR --seed SEED` — discovers
   `{message,orderbook}` file pairs under `RAW_DIR` by filename pattern, writes one parquet
   per ticker-day to `OUT_DIR`. `--seed` is logged even though this step is deterministic
-  (CSV → parquet has no randomness) — every entry point takes `--seed` per `CLAUDE.md`.
+  (CSV → parquet has no randomness) — every entry point takes `--seed` per `RULES.md`.
 
 ## What this contract does not cover yet
 

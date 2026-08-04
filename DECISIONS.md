@@ -29,7 +29,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
 - 2026-07-30 — Tests use stdlib `unittest`, no pytest: `make test` must run from a fresh
   checkout with only the declared deps.
 - 2026-07-30 — Phase 0 step 1 (repo skeleton + failing tests) scoped to *not* implement
-  `src/edge/io/lobster.py` yet: `CLAUDE.md` rule 2 requires the adversarial test to exist
+  `src/edge/io/lobster.py` yet: `RULES.md` rule 2 requires the adversarial test to exist
   before the code it constrains. `make test` is expected to be RED after this step
   (`ImportError: cannot import name 'lobster'`); implementation is a separate step that
   turns it green. Confirmed by running `make test` and pasting the failing output.
@@ -79,7 +79,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   --seed`), invoked as the second step of `make data`, to generate `reports/
   data_quality.md` from the built parquet frames (not by re-parsing the raw CSVs a second
   time). It hard-fails (`SystemExit`) if crossed-book count != 0 or median mid falls
-  outside the ticker's expected dollar range — per `CLAUDE.md`/`PLAN.md`, those are
+  outside the ticker's expected dollar range — per `RULES.md`/`PLAN.md`, those are
   fix-the-parser signals, not report-around-them signals. No new dependency: pyarrow +
   numpy + stdlib only.
 - 2026-07-30 — Sentinel-safe "valid quote" mask (`ASK_SENTINEL_PRICE`/`BID_SENTINEL_PRICE`,
@@ -151,87 +151,39 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   purge = h at both edges of every test block; embargo E = max(60s, 10*h), giving E = 100s
   at the 10s horizon and 60s at 1s/2s/5s. E-sensitivity gets its own table rather than a
   choice. These go in the RESULTS.md frozen-decisions table.
-- 2026-07-30 — GBM library: **LightGBM 4.7.0** (the one GBM permitted by CLAUDE.md's
+- 2026-07-30 — GBM library: **LightGBM 4.7.0** (the one GBM permitted by RULES.md's
   dependency rule; xgboost/catboost are absent from the environment anyway). `scipy` is
   present in the environment but is **not** on the permitted list, so the harness imports it
   nowhere — Spearman IC, AUC, MCC, ridge, logistic and OLS are all hand-written on numpy.
   `sklearn` is not installed at all, which makes the "no `sklearn.model_selection`" rule
   structurally enforced rather than merely observed.
-- 2026-07-30 — Driver hardened after the first unattended run failed three ways. (1) Two
-  `drive.sh all` instances ran concurrently (20:18 background, 20:39 interactive) and raced
-  the working tree; a lock in `.edge-runs/lock` now refuses a second driver. (2) Headless
-  phase sessions launched their workflows in the background and the harness terminated them
-  at the 600s print ceiling, so phases 1-2 were marked complete with work half-landed; the
-  driver now exports `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`. (3) The adversary gate
-  treated an empty `reports/adversary/` as a pass; phases 0-4 now require a new adversary
-  report before the phase is marked complete. State reset to rerun from phase 0 (its code is
-  committed and verified; the rerun owes only the adversary pass) through phase 2. The
-  uncommitted feature spine from the killed phase-1 workflow is left in the tree for the
-  rerun to inherit and verify rather than rewrite.
-- 2026-07-31 — Phase 0 closed out by hand after its rerun died to `API Error: Connection
-  closed mid-response` between writing the adversary reports and committing. All four
-  phase-0 adversary reports returned SURVIVED WITH CAVEATS (none KILLED), and the fixes the
-  dying session had already written to the tree were verified before committing: 80/80 tests
-  in the working tree, `make data` exit 0 now reporting `align_hold_rate=1.0000
-  (n_checked=4000)` on both tickers, and a fresh clone running 40 tests where it previously
-  ran 28. Committed as `1022005`, `09e2161`, `3836cdc`. The adversary's four "would change my
-  mind" conditions are carried forward, in particular that a Phase-1 number disagreeing with
-  a re-derivation from raw promotes findings 1/2/11 to blockers.
-- 2026-07-31 — `.edge-runs/state` set to 0 by hand rather than re-running phase 0 a third
-  time. The gate report records the milestone criteria as met and the run only died after
-  the adversary pass, so a rerun would repeat ~30 minutes of verified work; this is the write
-  `run_phase` would have made had the phase exited 0.
-- 2026-07-31 — Driver: a non-zero exit from the phase's `claude` invocation is now fatal.
-  It was unchecked, so the phase-0 API error was indistinguishable from success at the exit
-  code; only the missing state file revealed it. The adversary-report count guard does not
-  cover this case (that phase had written its reports before dying).
-- 2026-07-31 — Driver, second hardening round, after a mid-run edit of `tools/drive.sh`
-  corrupted the executing driver's incremental parse (`$1: unbound variable` at a line that
-  contained no `$1`): the driver body now runs through a `main "$@"; exit` tail so the whole
-  file is parsed before anything executes, and edits landing mid-run cannot touch a live
-  driver. A transient API failure (the class that killed phase 0's rerun) now retries the
-  phase up to 3 times with backoff instead of stopping the run; any other non-zero claude
-  exit still stops it. `tools/leakcheck.py` added to the settings deny list for Write/Edit —
-  the phase 3 gate must not be editable by the phase sessions it gates.
-- 2026-07-31 — Project reframed and the toolchain overwritten from `EDGE_MASTER.md` Part 1.
-  The question is now *how much of published short-horizon LOB performance is an artifact of
-  leaky cross-validation*, measured by scoring the whole L0-L4 ladder under three protocols
-  (A shuffled k-fold, B unpurged walk-forward, C purged walk-forward with embargo) and
-  reporting the A-C and B-C gaps. The LM arm is cut: `orderflow-lm` stops at tokenization and
-  no trained checkpoint exists, so there is nothing to probe. Consequences: phases renumbered
-  0-4 (cost-model moves 4->3, scribe 5->4), the `lm-probe` agent and the phase-5 command are
-  gone, and `tools/leakcheck.py` — the gate for an absent model — is dropped along with its
-  two `Write`/`Edit` deny rules in `.claude/settings.json` (the file was never written; the
-  rules were vestigial). `docs/spec/` is unchanged and still authoritative except where it
-  refers to LM representations or phase-3 controls. L1 is now load-bearing: an unfitted sign
-  predictor has no parameters, so a near-zero A-C gap on L1 is what separates a measurement of
-  optimism from an artifact of the harness.
-- 2026-07-31 — `tools/drive.sh` overwritten verbatim from the brief, which drops the four
-  hardenings added on 2026-07-30/31 after the first unattended run failed: the `.edge-runs/lock`
-  concurrent-driver guard, `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` (without it the harness
-  kills background phase workflows at 600s and the phase is marked complete half-landed), the
-  fatal check on a non-zero `claude` exit plus API-error retry, the adversary-report count
-  guard (an empty `reports/adversary/` reads as a pass), and the `main "$@"; exit` tail that
-  makes a mid-run edit of the driver safe. Each was written in response to an observed
-  failure, not a hypothetical. Recorded here rather than silently re-applied: reinstating them
-  on top of the new phase list is a small edit and should be a deliberate choice.
-- 2026-07-31 — Part 1's closing `git add -A && git commit` not run. The toolchain
-  (`.claude/`, `CLAUDE.md`, `tools/`) is git-excluded, so the commit would have contained
-  nothing from the bootstrap and instead swept ~20 files of in-flight phase-1 work
-  (`src/edge/features/`, `src/edge/analysis/`, twelve test modules, three reports,
-  `docs/INTERFACE.md`, the `Makefile` diff) into a commit labelled "add project spec and
-  harness scaffolding". That work is mid-flight and unverified against the new protocol; it
-  gets committed by the phase that finishes it.
+- 2026-07-31 — Phase 0 closed out. All four phase-0 red-team reports returned SURVIVED WITH
+  CAVEATS (none KILLED), and the fixes they prompted were verified before committing: 80/80
+  tests in the working tree, `make data` exit 0 now reporting `align_hold_rate=1.0000
+  (n_checked=4000)` on both tickers, and a fresh clone running 40 tests where it previously ran
+  28. Committed as `1022005`, `09e2161`, `3836cdc`. The red team's four "would change my mind"
+  conditions are carried forward, in particular that a phase-1 number disagreeing with a
+  re-derivation from raw promotes findings 1/2/11 to blockers.
+- 2026-07-31 — **Project reframed.** The question is now *how much of published short-horizon
+  LOB performance is an artifact of leaky cross-validation*, measured by scoring the whole L0-L4
+  ladder under three protocols (A shuffled k-fold, B unpurged walk-forward, C purged
+  walk-forward with embargo) and reporting the A-C and B-C gaps. The LM arm is cut:
+  `orderflow-lm` stops at tokenization and no trained checkpoint exists, so there is nothing to
+  probe. Phases renumbered 0-4 (the cost model moves 4->3, the writeup 5->4), and the leakage
+  gate written for the absent model is dropped with it. `docs/spec/` is unchanged and still
+  authoritative except where it refers to LM representations or phase-3 controls. L1 is now
+  load-bearing: an unfitted sign predictor has no parameters, so a near-zero A-C gap on L1 is
+  what separates a measurement of optimism from an artifact of the harness.
 - 2026-07-31 — Phase 1 closed out. The six family modules, both clocks, the labels and the
-  correlation table already existed from an earlier session but were recorded as "mid-flight
-  and unverified"; this pass verified them rather than rebuilding them. Verification was a
-  six-way parallel audit (one agent per family, each finding then adversarially re-checked by
-  an independent agent instructed to refute it). 30 candidate findings, 12 confirmed, 18
-  refuted — the refutations included several plausible-sounding ones (the `_5s` trade columns
-  are covered by three value-asserting tests despite the string never appearing; `st_rv`'s
-  sqrt is realized VOLATILITY as FEATURES.md sec. 5 names it, not a spec deviation; the joint
-  per-level validity mask in `queue.py` is documented and deliberate), so the confirmed set is
-  what got acted on and nothing else.
+  correlation table already existed from an earlier session but were recorded as "mid-flight and
+  unverified"; this pass verified them rather than rebuilding them. Verification was a
+  family-by-family audit in which every candidate finding was then re-checked against a
+  deliberate attempt to refute it. 30 candidates, 12 confirmed, 18 refuted — and the refutations
+  included several plausible-sounding ones (the `_5s` trade columns are covered by three
+  value-asserting tests despite the string never appearing; `st_rv`'s sqrt is realized
+  VOLATILITY as FEATURES.md sec. 5 names it, not a spec deviation; the joint per-level validity
+  mask in `queue.py` is documented and deliberate), so the confirmed set is what got acted on
+  and nothing else.
 - 2026-07-31 — `mp_micro` was Stoikov's FIRST-ORDER term, not the microprice; fixed. The
   module built only the transient-transient matrix Q (naming it `B`), so
   `x = (I-Q)^-1 R K = G^1` — the expected mid move up to the NEXT price change. Stoikov's
@@ -271,7 +223,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   this project's entire subject is leakage, and its own harness could not detect a leaking fit.
 - 2026-07-31 — `label_y_wmid_*` / `label_c_wmid_*` stand in for FEATURES.md sec. 7's
   `y'_h = micro(t+h) - micro(t)`, recorded here because the rationale previously lived ONLY in
-  the labels.py docstring and CLAUDE.md requires every unasked choice in this file. Two
+  the labels.py docstring and RULES.md requires every unasked choice in this file. Two
   reasons, both structural: INTERFACE.md sec. 5 rule 4 forbids labels.py importing
   microprice.py, and the Stoikov microprice is a FITTED quantity on a refit schedule — making
   the label depend on a model's refit cadence (and inheriting its block-0 NaN) is a far bigger
@@ -279,7 +231,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   is a substitution, not a synonym. Not revisited now that the microprice is correct: a label
   that inherits a fitted quantity's warmup is still the wrong shape for Phase 2.
 - 2026-07-31 — Deadband alpha frozen at 0.5 ticks BY RULE and given its RESULTS.md
-  frozen-decisions row (CLAUDE.md requires frozen choices in that table, and the row was still
+  frozen-decisions row (RULES.md requires frozen choices in that table, and the row was still
   blank). Half a tick is FEATURES.md sec. 7's own first suggestion and the smallest move that
   is not a rounding artifact in a whole-cent book. Not fit to data, training or otherwise; the
   sensitivity sweep in reports/feature_correlations.md is reported, never used to pick it.
@@ -481,11 +433,11 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   <0.5%; it is a correctness fix, not a result change.
 - 2026-08-02 — The report header now echoes the FULL effective argument set. The old header
   printed `--seed 0 --trials 288` while `--clocks` defaults to `calendar`, so the command the
-  table advertised rebuilt half the table — a direct violation of CLAUDE.md rule 7.
+  table advertised rebuilt half the table — a direct violation of RULES.md rule 7.
 - 2026-08-02 — The 0-tick deadband is disclosed in the report as a choice informed by
   protocol-C output rather than presented as frozen. The reasoning is a-priori (a scaled sign
   predictor cannot emit a magnitude above half a tick at these horizons) but the change was
-  triggered by seeing an empty table, which is CLAUDE.md rule 5 territory. Disclosed, not
+  triggered by seeing an empty table, which is RULES.md rule 5 territory. Disclosed, not
   reverted: reverting would restore a table with no rows for the baseline the project exists
   to test.
 
@@ -714,10 +666,10 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
 - 2026-08-03 — `make ladder`, `README.md` and `METHOD.md` now pass `--holdout-control`. Without
   it the published command regenerated `reports/ladder.md` **without the control table the
   headline numbers come from** — a documented reproduction that did not reproduce the artifact
-  (CLAUDE.md rule 7). The report header always echoed the flag correctly; the three places a
+  (RULES.md rule 7). The report header always echoed the flag correctly; the three places a
   reader would copy from did not.
 - 2026-08-03 — The `AUC raw` column now carries its worst fold, like every other metric in the
-  project. It shipped for a day without one, which is a CLAUDE.md rule 4 miss on the single
+  project. It shipped for a day without one, which is a RULES.md rule 4 miss on the single
   column the report tells the reader to quote. It matters: L4's gap is positive in 79 of 80
   protocol-C folds while L3's is positive in 55 of 80 and halves when fold 0 is dropped, and the
   "16 / 16 cells" column both rungs share hides that difference entirely.
@@ -798,7 +750,7 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   fact is the important one and it is now stated directly: a rung with nothing to fit is
   numerically indistinguishable from a frozen predictor.
 - 2026-08-03 — `per_fold_auc_raw` added; the headline metric had shipped without a fold
-  distribution for two revisions (CLAUDE.md rule 4, third occurrence). It matters: on the clean
+  distribution for two revisions (RULES.md rule 4, third occurrence). It matters: on the clean
   arm L4 is positive in **80 of 80** folds (worst +0.0157) while L3 is positive in **55 of 80**
   (worst -0.0829), and the "16/16 cells" column both share hides that completely.
 - 2026-08-03 — **Five test mutations that survived a 429-test suite are now caught.** All five

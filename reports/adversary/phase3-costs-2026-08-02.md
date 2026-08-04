@@ -1,9 +1,9 @@
 VERDICT: SURVIVED WITH CAVEATS
 
-Red team on Phase 3 (`reports/costs.md`, `src/edge/costs/*`). Fresh context; every number below
+Red team on Phase 3 (`reports/costs.md`, `src/edge/costs/*`). Every number below
 was recomputed from `data/features/*.parquet` and `data/raw/*.csv` with code that does not
 import `edge.costs`, except where noted. Scratch scripts:
-`/private/tmp/claude-501/-Users-oscardalton-edge/c799d059-907f-4b13-8c55-729f978d860e/scratchpad/`
+`scratch/redteam/`
 (`indep.py`, `dsr.py`, `ctrl.py`, `ctrl2.py`, `const.py`, `lat.py`).
 
 The PnL, trade counts, gross ticks/trade and break-even columns are arithmetically right and
@@ -58,7 +58,7 @@ model-invariant. None of that makes the PnL wrong, so this is not a kill.
    output rather than by a test") both date it 2026-07-31, same day as the table. It is logged
    and the reason given (a scaled sign predictor cannot emit >0.5 ticks at 1s) is sound, but the
    knob that sets turnover, and therefore the entire cost story, was set by looking at protocol-C
-   test-fold output. CLAUDE.md rule 5. **Worse: the report still says the old value.**
+   test-fold output. RULES.md rule 5. **Worse: the report still says the old value.**
    `costs/run.py:252` writes "Trades only when |prediction| exceeds the 0.5-tick deadband" while
    `simulate(..., deadband_ticks=0.0)` is never passed anything else. The stated assumption
    contradicts the code that produced the table.
@@ -69,7 +69,7 @@ model-invariant. None of that makes the PnL wrong, so this is not a kill.
    that excludes its own trials. It does not matter, because of item 10's DSR result, but the
    log is out of date and RESULTS.md's "break-even cost (ticks)" column is still empty.
 10. **Pooled-number laundering** — yes, everywhere. Every cell is pooled over 5 folds with no
-    per-fold distribution and no worst fold (CLAUDE.md rule 4). Recomputed for INTC calendar 1s
+    per-fold distribution and no worst fold (RULES.md rule 4). Recomputed for INTC calendar 1s
     L1 (`dsr.py`): per-fold gross ticks/trade {0.0232, 0.0233, 0.0192, 0.0123, 0.0281} — worst
     fold is 0.0123, 42% below the pooled 0.0213 — over per-fold n {3423, 3375, 3359, 3385, 3501}.
     Per-fold break-even is homogeneous {-0.794, -0.795, -0.799, -0.799, -0.790} only because it
@@ -117,7 +117,7 @@ neighbours (script inline in the transcript; 120 rows have trades, 24 are L0 wit
   `python3 -m edge.costs.run --seed 0 --trials 288` (the string in the report header, and
   `METHOD.md:176` prints an even shorter one) defaults to `--clocks calendar` and would emit
   half the table. The real command needs `--clocks calendar,event`; with it the body diffs clean
-  against the committed file. CLAUDE.md rule 7 ("reproducing a table is one command") is not met
+  against the committed file. RULES.md rule 7 ("reproducing a table is one command") is not met
   by the command the table advertises.
 - **Trade counts do not match the stated explanation.** The report says counts "differ across
   rungs because the deadband bites differently". The deadband is 0. `_non_overlapping` is

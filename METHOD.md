@@ -272,7 +272,7 @@ tautology rather than a finding.
 
 ## 8. What the red team changed
 
-Seven adversary passes ran against artifacts, with fresh context and read-only access. They are
+Eleven red-team passes ran against the artifacts, read-only. They are
 in `reports/adversary/`. The findings that changed code:
 
 - **The in-sample calibration was inflating the phase-2 headline** (§4). Every large negative

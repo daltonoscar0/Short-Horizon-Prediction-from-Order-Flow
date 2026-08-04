@@ -2,10 +2,10 @@ VERDICT: SURVIVED WITH CAVEATS
 
 # Phase 1 red team — lookahead and normalization
 
-Fresh context. All numbers below were produced by scripts I wrote, run against
+All numbers below were produced by scripts I wrote, run against
 `data/frames/*.parquet` and `data/features/*.parquet` as they stand on 2026-07-31.
 Interpreter `/opt/anaconda3/bin/python3`, `PYTHONPATH=src`. Scratch scripts live in
-`/private/tmp/claude-501/-Users-oscardalton-edge/96c46a98-4b0f-4ca5-b626-aec1762f0992/scratchpad/rt/`.
+`scratch/redteam/`.
 Nothing outside `reports/adversary/` was modified. `make features` was not run.
 
 ---

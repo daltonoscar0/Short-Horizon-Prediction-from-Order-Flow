@@ -18,7 +18,7 @@ the harness can fix:
 - The A→C optimism gap is measured across five intraday blocks of one day. Whether it is a
   property of *this literature's protocol* or of *this Thursday* is not decidable from here.
 
-**The scope-discipline rule (CLAUDE.md rule 6) says one axis at a time.** Days first: the same
+**The scope-discipline rule (RULES.md rule 6) says one axis at a time.** Days first: the same
 two names, twenty sessions, folds cut on day boundaries. Only then more names.
 
 **What would change my mind:** if the A→C gap on L4 collapses from ~0.49 to near zero once

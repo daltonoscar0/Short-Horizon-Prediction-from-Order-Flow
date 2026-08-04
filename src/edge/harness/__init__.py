@@ -1,6 +1,6 @@
 """Hand-written three-protocol cross-validation harness. THIS PACKAGE IS THE CONTRIBUTION.
 
-CLAUDE.md hard rule 1: no `sklearn.model_selection` anywhere, and `sklearn` is not installed
+RULES.md hard rule 1: no `sklearn.model_selection` anywhere, and `sklearn` is not installed
 so the rule is enforced by the environment rather than by discipline. Every splitter, metric
 and linear fit here is written on numpy. `lightgbm` is the one sanctioned GBM library (L4).
 
@@ -42,7 +42,7 @@ NS_PER_SEC = 1_000_000_000
 # 5 is the conventional default, frozen a priori, never tuned against a fold result.
 N_FOLDS = 5
 
-# Protocol A's k. Equal to N_FOLDS for the reason above; named separately because CLAUDE.md
+# Protocol A's k. Equal to N_FOLDS for the reason above; named separately because RULES.md
 # calls it out as a frozen choice that needs its own RESULTS.md row.
 K_SHUFFLED = N_FOLDS
 

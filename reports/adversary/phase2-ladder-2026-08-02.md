@@ -193,7 +193,7 @@ substantively:
 
 - `RESULTS.md`'s frozen-decisions table has **embargo E blank** ("Phase 2") even though the
   shipped table uses `E = max(60s, 10h)`, and has **no row for k, protocol A's fold count**.
-  `CLAUDE.md` requires both.
+  `RULES.md` requires both.
 - `EVAL_PROTOCOL.md` sec. 1 requires an E-sensitivity table. `run.py` implements
   `--embargo-sweep`; `ladder.md` has no such section, so it was never run.
 - The `RESULTS.md` headline ladder table is still empty. No phase-2 number has been appended

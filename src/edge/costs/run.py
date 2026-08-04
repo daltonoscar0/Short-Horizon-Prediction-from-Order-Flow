@@ -266,7 +266,7 @@ def main(argv=None):
     p.add_argument("--clocks", default="calendar")
     p.add_argument("--horizons", default="1s,5s")
     p.add_argument("--trials", type=int, default=1,
-                   help="configurations tried, for the deflated Sharpe (CLAUDE.md rule 4)")
+                   help="configurations tried, for the deflated Sharpe (RULES.md rule 4)")
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args(argv)
 
@@ -393,7 +393,7 @@ def _write(args, rows, dm_rows):
         w("# Transaction costs, PnL and break-even cost (Phase 3)\n\n")
         # Echo the FULL effective argument set. The previous header printed only --seed and
         # --trials, and `--clocks` defaults to calendar, so the advertised command rebuilt
-        # half the table (CLAUDE.md rule 7, 2026-08-02 red team).
+        # half the table (RULES.md rule 7, 2026-08-02 red team).
         w(f"`python3 -m edge.costs.run --seed {args.seed} --trials {args.trials} "
           f"--tickers {args.tickers} --clocks {args.clocks} --horizons {args.horizons}`\n\n")
         w("**Protocol C only.** A PnL number computed under a leaky protocol is not a weaker ")
@@ -441,7 +441,7 @@ def _write(args, rows, dm_rows):
         w("## Break-even cost table\n\n")
         w("Negative means underwater — reported, not clipped. `gross t/trade` is the column ")
         w("that discriminates between rungs; it carries a block-bootstrap CI and the worst of ")
-        w("the five folds beside it, per CLAUDE.md rule 4.\n\n")
+        w("the five folds beside it, per RULES.md rule 4.\n\n")
         w("| ticker | clock | h | rung | latency | trades | gross t/trade | gross CI lo | "
           "gross CI hi | worst fold | be total (ticks) | net PnL $ | mean PnL/trade $ | "
           "mean CI lo | mean CI hi | be incr (ticks) | be incr (bps) | DSR gross |\n")
@@ -460,7 +460,7 @@ def _write(args, rows, dm_rows):
         w("\n")
 
         w("## Per-fold gross ticks/trade under protocol C\n\n")
-        w("No pooled number travels alone (CLAUDE.md rule 4). Reference latency only.\n\n")
+        w("No pooled number travels alone (RULES.md rule 4). Reference latency only.\n\n")
         w("| ticker | clock | h | rung | per-fold gross ticks/trade | worst |\n")
         w("|---|---|---|---|---|---|\n")
         ref_ms = LATENCIES_NS[0] / 1e6

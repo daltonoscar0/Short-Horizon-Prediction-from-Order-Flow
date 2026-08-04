@@ -246,7 +246,7 @@ def run_cell(cols, y, ts, horizon_ns, protocol, seed, embargo_ns=None, n_folds=N
             "base_rate": fold_summary([r["base_rate"] for r in kept]),
             "per_fold_ic": [r["ic"] for r in kept],
             "per_fold_r2": [r["r2"] for r in kept],
-            # The headline metric needs its own fold distribution (CLAUDE.md rule 4). It
+            # The headline metric needs its own fold distribution (RULES.md rule 4). It
             # shipped without one for two revisions, and it matters: on the clean arm L4 is
             # positive in 80 of 80 folds while L3 is positive in 55 of 80.
             "per_fold_auc_raw": [r["auc_raw"] for r in kept],
@@ -772,7 +772,7 @@ def _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, 
         w("tail. The `A_rand - C_pos` column here is the split effect measured with a ")
         w("rule-independent model, and it is the number to quote.\n\n")
         w("`per-fold` and `worst` are the fold distribution of the split-only gap, which the ")
-        w("headline metric shipped without for two revisions (CLAUDE.md rule 4). Read them: ")
+        w("headline metric shipped without for two revisions (RULES.md rule 4). Read them: ")
         w("two rungs with the same 16/16 cell count can have very different fold behaviour.\n\n")
         w("| ticker | clock | h | rung | **A_rand-C_pos** | A_pos-C_pos | A_rand-C_rand | "
           "rule spread | folds > 0 | worst fold |\n")
@@ -883,7 +883,7 @@ def _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, 
     w("output and is immune to it by construction (2026-08-03 red team). `neg` counts folds ")
     w("with a negative fitted scale.\n\n")
     w("Every AUC column carries its WORST FOLD, because a median AUC of 0.71 built from folds "
-      "of {0.79, 0.75, 0.63, 0.48, 0.71} is a story about the early session (CLAUDE.md rule 4 "
+      "of {0.79, 0.75, 0.63, 0.48, 0.71} is a story about the early session (RULES.md rule 4 "
       "-- the raw column shipped without one for a day).\n\n")
     w("| ticker | clock | h | rung | protocol | bal. acc | MCC | AUC | AUC worst | AUC raw | "
       "AUC raw worst | neg | base rate |\n")

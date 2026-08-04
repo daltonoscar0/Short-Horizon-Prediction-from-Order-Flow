@@ -47,8 +47,8 @@ than any modelling improvement — worth an email to Dakota about the budget.
 - The orderflow-lm **LOBSTER parser** source, and its output schema.
 - The order-flow LM's **tokenizer spec** and **training config** — plus, critically, the
   list of dates/tickers it was trained on, so the Phase-3 leakage check is possible.
-- The trained model's checkpoint metadata (layers, hidden dim, context length) — Claude
-  needs the shapes to write the extraction code without guessing.
+- The trained model's checkpoint metadata (layers, hidden dim, context length) — the
+  extraction code needs the shapes rather than guessing them.
 - `PLAN.md`, `EVAL_PROTOCOL.md`, `FEATURES.md`, `READING_LIST.md`, `INTERVIEW.md` (these
   files) as Project knowledge.
 - Your garden-path paper's probing code, if the LM-state extraction can reuse it — the

@@ -22,7 +22,7 @@ correlates two existing columns. `label_y_*` is the only forward-looking column 
 merged table (grep `label_`); every `x` this module treats as a feature is causal by
 construction of the table it came from.
 
-Hand-written statistics only (CLAUDE.md's dependency rule -- no scipy, no pandas, no sklearn):
+Hand-written statistics only (RULES.md's dependency rule -- no scipy, no pandas, no sklearn):
   - Pearson r: `_pearson`, a mean-centred dot-product ratio.
   - Spearman IC: `_rank_avg` (hand-written average-rank transform: tied values share the MEAN
     of the ranks they span) followed by `_pearson` of the two rank arrays. Ranks are computed
@@ -349,7 +349,7 @@ def _clock_effect_summary(grid_rows):
     """Mean/median |IC| at the 1s horizon, calendar vs event clock, raw features only.
 
     The boring explanation for why so many LEAK-SMELL items below are on the event clock
-    (CLAUDE.md rule 3: propose it before treating a number as a discovery): event-clock stamps
+    (RULES.md rule 3: propose it before treating a number as a discovery): event-clock stamps
     are BOOK-CHANGING EVENTS by construction (clocks.py), so they are drawn exactly at moments
     order flow is active, not uniformly in time. A feature measured at those moments is
     correlated with the immediate next second's move mechanically more often than the same
@@ -787,7 +787,7 @@ def main(argv=None):
     parser.add_argument("--out-md", default="reports/feature_correlations.md")
     parser.add_argument("--out-csv", default="reports/feature_correlations.csv")
     parser.add_argument("--date", default=DATE)
-    parser.add_argument("--seed", type=int, default=0)  # deterministic step; logged only, per CLAUDE.md
+    parser.add_argument("--seed", type=int, default=0)  # deterministic step; logged only, per RULES.md
     args = parser.parse_args(argv)
 
     print(f"seed={args.seed} (deterministic step, no randomness consumed)")

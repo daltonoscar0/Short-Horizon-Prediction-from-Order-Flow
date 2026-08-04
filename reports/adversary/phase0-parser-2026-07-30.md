@@ -2,7 +2,7 @@ VERDICT: SURVIVED WITH CAVEATS
 
 Target: `src/edge/io/lobster.py`, `tests/test_lobster.py`, `tests/test_alignment.py`,
 `docs/DATA_CONTRACT.md`, `src/edge/io/quality.py`, `reports/data_quality.md`.
-Red team, fresh context, 2026-07-30. All scripts under `/tmp/redteam/`.
+Red-team pass, 2026-07-30. All scripts under `/tmp/redteam/`.
 
 ## What I tried and what happened
 

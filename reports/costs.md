@@ -22,7 +22,7 @@
 
 ## Break-even cost table
 
-Negative means underwater — reported, not clipped. `gross t/trade` is the column that discriminates between rungs; it carries a block-bootstrap CI and the worst of the five folds beside it, per CLAUDE.md rule 4.
+Negative means underwater — reported, not clipped. `gross t/trade` is the column that discriminates between rungs; it carries a block-bootstrap CI and the worst of the five folds beside it, per RULES.md rule 4.
 
 | ticker | clock | h | rung | latency | trades | gross t/trade | gross CI lo | gross CI hi | worst fold | be total (ticks) | net PnL $ | mean PnL/trade $ | mean CI lo | mean CI hi | be incr (ticks) | be incr (bps) | DSR gross |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -245,7 +245,7 @@ Negative means underwater — reported, not clipped. `gross t/trade` is the colu
 
 ## Per-fold gross ticks/trade under protocol C
 
-No pooled number travels alone (CLAUDE.md rule 4). Reference latency only.
+No pooled number travels alone (RULES.md rule 4). Reference latency only.
 
 | ticker | clock | h | rung | per-fold gross ticks/trade | worst |
 |---|---|---|---|---|---|

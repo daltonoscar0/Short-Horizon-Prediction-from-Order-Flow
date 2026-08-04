@@ -404,7 +404,7 @@ Raw AUC is a rank statistic on the raw model, so it never sees the scale at all.
 
 **What it settles.** The published `A' - C` shrank L4's raw-AUC gap from +0.1740 to +0.1371 and that shrink was attributed to the calibration rule. It cannot have been: with the model held fixed the rule is worth exactly nothing on this metric. The whole of that shrink was the model's LOST TRAINING WINDOW -- under the positional rule the model is fitted on the first 80% of the day and never sees its tail. The `A_rand - C_pos` column here is the split effect measured with a rule-independent model, and it is the number to quote.
 
-`per-fold` and `worst` are the fold distribution of the split-only gap, which the headline metric shipped without for two revisions (CLAUDE.md rule 4). Read them: two rungs with the same 16/16 cell count can have very different fold behaviour.
+`per-fold` and `worst` are the fold distribution of the split-only gap, which the headline metric shipped without for two revisions (RULES.md rule 4). Read them: two rungs with the same 16/16 cell count can have very different fold behaviour.
 
 | ticker | clock | h | rung | **A_rand-C_pos** | A_pos-C_pos | A_rand-C_rand | rule spread | folds > 0 | worst fold |
 |---|---|---|---|---|---|---|---|---|---|
@@ -1013,7 +1013,7 @@ AUC is computed on the DIRECTIONAL subset only -- rows the deadband calls up or 
 
 **`AUC raw` is the one to quote.** The through-origin rescale is rank-preserving only UP TO SIGN, and the fitted scale comes out negative in a small number of protocol-C folds and never under A; a negative scale flips the ranking and sends AUC to 1-AUC. On the unfitted rungs that channel alone manufactured the entire apparent A-C gap -- L1m and L2's gaps are NEGATIVE on the raw score. `AUC raw` scores the rung's raw output and is immune to it by construction (2026-08-03 red team). `neg` counts folds with a negative fitted scale.
 
-Every AUC column carries its WORST FOLD, because a median AUC of 0.71 built from folds of {0.79, 0.75, 0.63, 0.48, 0.71} is a story about the early session (CLAUDE.md rule 4 -- the raw column shipped without one for a day).
+Every AUC column carries its WORST FOLD, because a median AUC of 0.71 built from folds of {0.79, 0.75, 0.63, 0.48, 0.71} is a story about the early session (RULES.md rule 4 -- the raw column shipped without one for a day).
 
 | ticker | clock | h | rung | protocol | bal. acc | MCC | AUC | AUC worst | AUC raw | AUC raw worst | neg | base rate |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|

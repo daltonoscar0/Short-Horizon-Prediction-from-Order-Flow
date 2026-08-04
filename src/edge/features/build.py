@@ -22,7 +22,7 @@ insertion order), then each family's own dict-insertion order, with a raw column
 twin placed immediately after it. Two runs on the same inputs therefore produce
 byte-comparable schemas.
 
-`--seed` is accepted because every entry point takes one (CLAUDE.md rule 7), not because
+`--seed` is accepted because every entry point takes one (RULES.md rule 7), not because
 anything here is stochastic: `compute()` is pure by contract (INTERFACE.md sec. 5 rule 2)
 and this module adds no randomness of its own, so the flag is parsed and logged, never
 wired into a computation.

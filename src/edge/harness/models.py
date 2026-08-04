@@ -37,7 +37,7 @@ import numpy as np
 # The handcrafted set for L3/L4 (PLAN.md's list: multi-level OFI, integrated OFI, queue
 # imbalance, microprice deviation, spread, depth, trade-sign imbalance, realized vol,
 # time-of-day). Frozen HERE, a priori, and deliberately not the full 144-column table: an
-# unrestricted cross product would inflate the trial count for free (CLAUDE.md rule 4) and
+# unrestricted cross product would inflate the trial count for free (RULES.md rule 4) and
 # hand a GBM a wide multiple-comparison surface to mine.
 L3_FEATURES = (
     # order flow -- best level, three lookbacks, plus the integrated and deep summaries
@@ -278,7 +278,7 @@ class L4GBM(Rung):
         params["seed"] = self.seed
         params["bagging_seed"] = self.seed
         params["feature_fraction_seed"] = self.seed
-        params["num_threads"] = 1  # determinism over speed (CLAUDE.md rule 7)
+        params["num_threads"] = 1  # determinism over speed (RULES.md rule 7)
         self.booster_ = lgb.train(
             params, lgb.Dataset(X, label=y), num_boost_round=self.N_ROUNDS
         )
