@@ -4,6 +4,7 @@ House style per tests/test_book.py / tests/test_normalize.py: every expected val
 literal derived arithmetic-by-arithmetic in a comment above the assertion, never a second
 call into the formula under test.
 """
+import os
 import unittest
 
 import numpy as np
@@ -381,6 +382,17 @@ def _truncate_event_frame(frame, cutoff):
     )
 
 
+def _built_frame_present():
+    return os.path.exists(frame_path("INTC"))
+
+
+@unittest.skipUnless(
+    _built_frame_present(),
+    "built event frames not present under data/frames: the three full-day microprice "
+    "properties (mp_micro is not wmid, block-0 NaN, refit-boundary causality) DID NOT RUN. "
+    "They need a whole trading day and cannot be exercised on the toy fixture. Run "
+    "`make data` to build the frames from the raw LOBSTER CSVs, then rerun.",
+)
 class TestRealIntcFrame(unittest.TestCase):
     """Property-style checks that only a full trading day can exercise: guards the "microprice
     is just a synonym for wmid" failure mode FEATURES.md sec. 3 warns about, and the block-fit
