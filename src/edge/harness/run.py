@@ -246,6 +246,10 @@ def run_cell(cols, y, ts, horizon_ns, protocol, seed, embargo_ns=None, n_folds=N
             "base_rate": fold_summary([r["base_rate"] for r in kept]),
             "per_fold_ic": [r["ic"] for r in kept],
             "per_fold_r2": [r["r2"] for r in kept],
+            # The headline metric needs its own fold distribution (CLAUDE.md rule 4). It
+            # shipped without one for two revisions, and it matters: on the clean arm L4 is
+            # positive in 80 of 80 folds while L3 is positive in 55 of 80.
+            "per_fold_auc_raw": [r["auc_raw"] for r in kept],
         }
     return out
 
@@ -669,13 +673,15 @@ def _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, 
     if holdout:
         w("## Control: how much of `A - C` is the calibration RULE, not the split\n\n")
         w("Protocol A re-run with **C's positional calibration holdout** (the last 20% of the ")
-        w("training rows in time) instead of its own random 20%. Split, folds, seed, model and ")
-        w("metrics are unchanged; only the calibration rule moves. `A' - C` is the gap with ")
-        w("the rule held constant.\n\n")
-        w("Why it must be disclosed beside the headline: under A the random holdout is ")
-        w("EXCHANGEABLE with A's random test fold and under B/C/D it is not, so part of every ")
-        w("`A - C` gap in this report is that asymmetry rather than the split. Found by the ")
-        w("2026-08-03 red team, which measured 57% of L4's median R2 gap in this channel.\n\n")
+        w("training rows in time) instead of its own random 20%. Split, folds, seed and metrics ")
+        w("are unchanged -- but **the model is NOT**, which is the defect: the rule and the ")
+        w("model's training rows move together here.\n\n")
+        w("> **SUPERSEDED as a decomposition -- see the CLEAN control below.** This arm was ")
+        w("built to isolate the calibration rule and cannot: `Rung.fit` fits the raw model on ")
+        w("the COMPLEMENT of the calibration holdout, so forcing A onto the positional rule ")
+        w("also strips A's model of the day's tail. `A' - C` is a crippled model, not a ")
+        w("differently-calibrated one, and the ~48%-of-the-gap attribution once drawn from it ")
+        w("is withdrawn. It is retained because the correction is only legible beside it.\n\n")
         w("| ticker | clock | h | rung | A (own rule) | A' (C's rule) | C | A-C | **A'-C** | "
           "rule share | A-C AUC raw | **A'-C AUC raw** |\n")
         w("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
@@ -714,18 +720,23 @@ def _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, 
         w("also takes away the day's tail. The 2x2 gave two rule-matched answers that ")
         w("disagreed by a factor of ~4, which is why the earlier headline was a bracket. ")
         w("Here the row difference is the rule and nothing else.\n\n")
-        w("`A_rand - C_pos` is the fully uncontrolled comparison reproduced inside this arm ")
-        w("(each protocol on its own rule). `A_pos - C_pos` and `A_rand - C_rand` are the two ")
-        w("rule-matched comparisons; **their spread is what the calibration rule is worth**, ")
-        w("and it is now a clean measurement rather than a bracket over a confound.\n\n")
-        w("> **READ THE DIFFERENCES, NOT THE LEVELS.** The overlap makes each arm's scale ")
-        w("partly IN-SAMPLE, which is the calibration that was killed on 2026-08-02 -- and it ")
-        w("bites here exactly as it did then: under the walk-forward arms a high-capacity ")
-        w("rung's amplitude is far too large and its R2-vs-zero goes sharply negative. The ")
-        w("overlap is identical in every arm, so a DIFFERENCE between arms is still clean, ")
-        w("but the absolute R2 levels in this table are not comparable to the headline ladder ")
-        w("and must not be quoted beside it. The raw-AUC table below has no amplitude in it ")
-        w("and is free of this.\n\n")
+        w("`A_rand - C_pos` is the split-only comparison and **it is the number to quote**. ")
+        w("`A_pos - C_pos` and `A_rand - C_rand` are the two rule-matched comparisons; their ")
+        w("`rule spread` is a DIFFERENCE IN DIFFERENCES -- the interaction of rule and ")
+        w("protocol, not 'what the rule is worth'. A rule worth +0.05 under both protocols ")
+        w("would show a spread of zero.\n\n")
+        w("> **THE R2 COLUMNS OF THIS TABLE ARE NOT USABLE, INCLUDING THE DIFFERENCES.** The ")
+        w("overlap makes each arm's scale partly IN-SAMPLE -- the calibration killed on ")
+        w("2026-08-02 -- and it bites asymmetrically, not identically: A's arm is unharmed ")
+        w("(R2 0.18378 against the headline ladder's 0.18316 at INTC calendar 1s) while C's is ")
+        w("destroyed (-0.25953 against +0.02134), because the in-sample scale bias grows with ")
+        w("capacity per training row and C trains on a fraction of A's rows. Under permuted ")
+        w("labels this construction manufactures an R2 gap of +0.062 +/- 0.058 out of pure ")
+        w("noise, against +0.010 +/- 0.009 for the main ladder. An earlier draft claimed the ")
+        w("overlap was identical in every arm and the differences therefore clean; that is ")
+        w("false for R2 and it is withdrawn (2026-08-03 fifth red team). **The raw-AUC table ")
+        w("below carries the same permutation null as the main ladder and is unaffected -- it ")
+        w("is the only part of this control that may be quoted.**\n\n")
         w("| ticker | clock | h | rung | A_rand | A_pos | C_rand | C_pos | A_rand-C_pos | "
           "**A_pos-C_pos** | **A_rand-C_rand** | rule spread |\n")
         w("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
@@ -760,9 +771,12 @@ def _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, 
         w("positional rule the model is fitted on the first 80% of the day and never sees its ")
         w("tail. The `A_rand - C_pos` column here is the split effect measured with a ")
         w("rule-independent model, and it is the number to quote.\n\n")
-        w("| ticker | clock | h | rung | A_rand-C_pos | **A_pos-C_pos** | **A_rand-C_rand** | "
-          "rule spread |\n")
-        w("|---|---|---|---|---|---|---|---|\n")
+        w("`per-fold` and `worst` are the fold distribution of the split-only gap, which the ")
+        w("headline metric shipped without for two revisions (CLAUDE.md rule 4). Read them: ")
+        w("two rungs with the same 16/16 cell count can have very different fold behaviour.\n\n")
+        w("| ticker | clock | h | rung | **A_rand-C_pos** | A_pos-C_pos | A_rand-C_rand | "
+          "rule spread | folds > 0 | worst fold |\n")
+        w("|---|---|---|---|---|---|---|---|---|---|\n")
         for ticker in tickers:
             for clock in clocks:
                 for h in horizons:
@@ -776,9 +790,16 @@ def _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, 
                         unc = v["A_rand"] - v["C_pos"]
                         m_pos = v["A_pos"] - v["C_pos"]
                         m_rand = v["A_rand"] - v["C_rand"]
-                        w(f"| {ticker} | {clock} | {h} | {name} | {_fmt(unc, 4)} | "
-                          f"**{_fmt(m_pos, 4)}** | **{_fmt(m_rand, 4)}** | "
-                          f"{_fmt(abs(m_pos - m_rand), 4)} |\n")
+                        pa = arms["A_rand"].get("per_fold_auc_raw", [])
+                        pc = arms["C_pos"].get("per_fold_auc_raw", [])
+                        per = [a - c for a, c in zip(pa, pc)
+                               if np.isfinite(a) and np.isfinite(c)]
+                        npos = sum(1 for x in per if x > 0)
+                        worst = min(per) if per else np.nan
+                        w(f"| {ticker} | {clock} | {h} | {name} | **{_fmt(unc, 4)}** | "
+                          f"{_fmt(m_pos, 4)} | {_fmt(m_rand, 4)} | "
+                          f"{_fmt(abs(m_pos - m_rand), 4)} | {npos}/{len(per)} | "
+                          f"{_fmt(worst, 4)} |\n")
         w("\n")
 
     if insample:
@@ -926,12 +947,12 @@ def _write_report(fh, results, sweeps, ladder_names, tickers, clocks, horizons, 
     w("magnitude), +0.0112 (L3) and +0.0192 (L4), medians across 16 cells. Read every gap ")
     w("against the `floor` column of the headline table, never against the L1 row ")
     w("(2026-08-02 red team, second pass).\n")
-    w("- **`A - C` is two channels, and the second one is the harness's own.** Roughly half of ")
-    w("L4's gap and ALL of L1's is the protocol-dependent calibration holdout rather than the ")
-    w("split -- see the control table above. Quote `A' - C` when the question is 'how much ")
-    w("optimism does shuffling buy a model', and `A - C` only when the question is 'how much ")
-    w("does the whole shuffled-k-fold PRACTICE buy', which bundles the calibration a ")
-    w("practitioner would also do (2026-08-03 red team, third pass).\n")
+    w("- **The calibration rule is NOT a second channel.** An earlier note here said roughly ")
+    w("half of L4's gap was the protocol-dependent calibration holdout and told the reader to ")
+    w("quote `A' - C`. Both are withdrawn. With the model's fit rows held fixed (the DECOUPLED ")
+    w("control), the rule moves raw AUC by exactly 0.000000 in all 96 rows -- it cannot move a ")
+    w("rank statistic on a fixed model. `A' - C` was low because it stripped A's model of the ")
+    w("day's tail. **Quote `A_rand - C_pos` from the decoupled raw-AUC table.**\n")
     w("- **On AUC, quote the raw column.** The rescale is rank-preserving only up to sign and ")
     w("the fitted scale goes negative in 27 of 400 protocol-C folds, which sends AUC to ")
     w("1-AUC. That channel alone produced the unfitted rungs' apparent gaps.\n")

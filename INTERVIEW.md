@@ -37,7 +37,7 @@ zero across 96 cells:
 
 | rung | A − C | *floor* | A − D (adjacency) | D − C (future) | C (honest) | **split-only, raw AUC** |
 |---|---|---|---|---|---|---|
-| L1 `sign(queue imbalance)` | +0.0043 | *+0.0043* | +0.0126 | −0.0085 | +0.0091 | **+0.0023** (below floor) |
+| L1 `sign(queue imbalance)` | +0.0043 | *+0.0043* | +0.0126 | −0.0085 | +0.0091 | **+0.0023** (= its floor) |
 | L3 ridge | +0.0587 | *+0.0112* | +0.0296 | +0.0231 | +0.0266 | **+0.0409** |
 | L4 GBM | **+0.3173** | *+0.0192* | **+0.2964** | +0.0067 | +0.0273 | **+0.1913** |
 
@@ -48,9 +48,10 @@ zero across 96 cells:
    larger channel; refit it and the floors go up 2–6×. Then a *clean* control — raw model fitted
    on the same seeded random 80% in every arm, only the scale rows moving — shows the rule is
    worth **exactly zero** on a rank metric, because a rank metric never sees the scale. The
-   split-only gap is **+0.1913** raw AUC for the GBM against a worst-case floor of +0.0383
-   (~10×), positive in 16 of 16 cells, and **+0.0023** for the parameter-free rung, which is
-   below its own floor — exactly what a rung with nothing to fit should show.
+   split-only gap is **+0.1913** raw AUC for the GBM — **8.1×** its worst-case floor as a median
+   of per-cell ratios, worst cell 3.4× — positive in 16 of 16 cells and in **80 of 80 folds**.
+   The parameter-free rung's gap is **numerically identical to its own frozen-predictor floor in
+   all 16 cells**, which is the strongest form of "it measured nothing" available.
 2. **93% of the GBM's gap is temporal adjacency, not the future.** Protocol D hands the model
    the whole future in disjoint blocks and that buys it +0.007. Label overlap is the dominant
    mechanism — and it is invisible in `B − C`, which can only touch ~1% of an expanding

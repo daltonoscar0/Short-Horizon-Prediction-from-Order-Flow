@@ -136,12 +136,16 @@ each fold's training rows in every arm (`model_mask`), and only the scale rows m
 which is a rank statistic on the raw model and therefore cannot see the scale at all, the rule
 then moves the gap by **0.000000 in all 96 rows** — an identity. The whole `A′` shrink was the
 lost training window. The split-only gap is **+0.1913** for L4, larger than the uncontrolled
-figure; on R² the rule is worth a median 0.0116, about 4%.
+figure. On R² the same statistic is not usable — see the overlap caveat below.
 
 The cost of that control, stated because it is real: the scale rows now overlap the model rows,
-which makes each arm's calibration partly in-sample — the artifact killed on 2026-08-02 — so the
-arm's absolute R² levels go sharply negative under the walk-forward arms and are not quoted
-anywhere. The overlap is identical across arms, so the differences are clean.
+which makes each arm's calibration partly in-sample — the artifact killed on 2026-08-02. **It is
+not symmetric.** The bias grows with capacity per training row, and C trains on a fraction of A's,
+so it lands almost entirely on the walk-forward side (A's R² unharmed at 0.18378, C's destroyed at
+−0.25953 on INTC calendar 1s). Under permuted labels the construction manufactures an R² gap of
++0.062 ± 0.058 out of noise against the main ladder's +0.010 ± 0.009. **The decoupled arm's R²
+columns are therefore unusable including the differences**, and only its rank columns are quoted,
+where the permutation null matches the main ladder's.
 
 **Folds are cut on wall-clock time, not stamp index.** 32% of INTC event-clock stamps sit
 within 0.5 ms of the previous one and carry ~2.3× the correlation of isolated stamps; an index

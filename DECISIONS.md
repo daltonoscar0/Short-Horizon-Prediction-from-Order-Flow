@@ -767,3 +767,53 @@ date. Frozen choices additionally get a row in the RESULTS.md frozen-decisions t
   confounded control it supersedes, stays counted on the same principle as trials 5 and 9 — it
   was fitted, it produced a number that was reported, and removing it would flatter the
   deflation.
+
+## After the 2026-08-03 fifth red team (`SURVIVED WITH CAVEATS`)
+
+- 2026-08-03 — **"The overlap is identical in every arm, so the differences are clean" is
+  withdrawn.** It is true of the overlap FRACTION and false of its effect. The in-sample scale
+  bias grows with capacity per training row, and C trains on 1/1.8 of A's rows at the median and
+  1/8.7 at fold 0, so the accepted cost lands almost entirely on one side of every difference:
+  at INTC calendar 1s the A arm is unharmed (R2 0.18378 vs the main ladder's 0.18316) while the C
+  arm is destroyed (-0.25953 vs +0.02134). Under permuted labels the decoupled construction
+  manufactures an R2 gap of +0.062 +/- 0.058 out of noise against the main ladder's
+  +0.010 +/- 0.009. **The decoupled arm's R2 columns are now marked unusable INCLUDING the
+  differences**, and the "rule is worth 0.0116 on R2, about 4%" figure built on them is
+  withdrawn — it sat inside its own null (a constant predictor scores +0.0082 on the same
+  statistic). Raw AUC carries the same null as the main ladder and is unaffected.
+- 2026-08-03 — **The model-fit-rule sweep is reported, because without it the control looks like
+  a free parameter chosen after the fact.** `A' - C` was already model-fit-rule-matched; the
+  headline `A - C` is the rule-INCONSISTENT one, so the commit relocated a choice rather than
+  removing one. Across six common rules the L4 gap is +0.1740 / +0.1371 / +0.1913 / +0.1927 /
+  +0.1977 / +0.2010, and the only low value is the rule that strips protocol A of the day's tail.
+  The defensible claim is a range — +0.19 to +0.20 under every rule that does not remove A's own
+  adjacency — not the point estimate the first draft gave.
+- 2026-08-03 — Margins are quoted as the **median of per-cell ratios**, not the ratio of medians:
+  L4 8.1x (worst cell 3.4x), L3 12.5x (worst cell 7.3x). The previous pass flagged exactly this
+  confusion in a different row and it recurred here; the min-cell *ratio* had also been silently
+  replaced by a min-cell *absolute margin*, which is the weaker statement dressed as the stronger.
+- 2026-08-03 — **L1 is no longer described as "clearing" or "failing" its floor.** L1's raw-AUC
+  gap and L1's raw-AUC floor are the same 16 numbers — ratio 1.000 in 16 of 16 cells — because L1
+  has no model to refit. Presenting that as a control that passes is circular. The underlying
+  fact is the important one and it is now stated directly: a rung with nothing to fit is
+  numerically indistinguishable from a frozen predictor.
+- 2026-08-03 — `per_fold_auc_raw` added; the headline metric had shipped without a fold
+  distribution for two revisions (CLAUDE.md rule 4, third occurrence). It matters: on the clean
+  arm L4 is positive in **80 of 80** folds (worst +0.0157) while L3 is positive in **55 of 80**
+  (worst -0.0829), and the "16/16 cells" column both share hides that completely.
+- 2026-08-03 — **Five test mutations that survived a 429-test suite are now caught.** All five
+  were in the WIRING rather than in `model_fit_mask` itself: a mask varying by protocol at the
+  call site, a positional mask at the call site, `DECOUPLED_ARMS["C_pos"]` pointing at protocol A,
+  `A_rand` silently positional, and the four arms run with `decouple_scale=False`. Two of the
+  original property tests were tautological — they called `model_fit_mask` twice with identical
+  arguments and compared the result to itself, so they could not fail for any deterministic
+  implementation. The properties are structural, so they are now asserted structurally: the
+  protocol must not be reachable from the mask's signature or from its call site, and the arms
+  must name the protocols their keys claim. The end-to-end test runs under both protocols; it ran
+  under A only, which is how the protocol-dependence mutation escaped.
+- 2026-08-03 — **The strongest surviving alternative explanation is recorded as item 0 of "what
+  would change my mind", not buried.** Across protocol-A fold counts k the raw-AUC gap is flat
+  (+0.0650 -> +0.0676) while the R2 gap rises smoothly — the signature of a channel that saturates
+  once each test row has one training neighbour, which is what intraday burst duplication would
+  produce and what "more training data leaks more" would not. Nothing in this repo separates it
+  from the §1 reading on a single session.

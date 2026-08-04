@@ -71,7 +71,7 @@ moves the gap by **0.000000 in all 96 rows**. That is an identity, and it is the
 
 | rung | uncontrolled `A − C` | `A′ − C` (confounded) | **clean split-only** | cells positive |
 |---|---|---|---|---|
-| L1 `sign(queue imbalance)` | +0.0022 | +0.0023 | **+0.0023** | 13 / 16 |
+| L1 `sign(queue imbalance)` | +0.0022 | +0.0023 | **+0.0023** | 13 / 16, = its own floor |
 | L3 ridge, full set | +0.0409 | +0.0283 | **+0.0409** | **16 / 16** |
 | L4 GBM, full set | +0.1740 | +0.1371 | **+0.1913** | **16 / 16** |
 
@@ -79,14 +79,21 @@ moves the gap by **0.000000 in all 96 rows**. That is an identity, and it is the
 that shrink was published as the calibration rule's contribution. It was the model's lost
 training window: with the model held fixed the rule is worth exactly nothing on this metric. The
 split-only gap is **+0.1913**, *larger* than the uncontrolled figure, ranging +0.0657 to +0.3132
-across cells. On R², where the metric does see amplitude, the rule is worth a median of **0.0116**
-for L4 — about 4% of its gap, not 48%.
+across cells. On R² the same statistic is **not usable at all**: the overlap contaminates the walk-forward arms
+asymmetrically, and under permuted labels this construction manufactures an R² gap of
++0.062 ± 0.058 out of pure noise against the main ladder's +0.010 ± 0.009. The `rule spread`
+figure of 0.0116 once quoted here sits inside that null — a constant predictor scores +0.0082 on
+the same statistic — and is withdrawn.
 
-**Read the decoupled arm's R² levels nowhere.** The accepted overlap makes each arm's scale
-partly in-sample — the calibration killed on 2026-08-02 — and it bites the same way: under the
-walk-forward arms a high-capacity rung's amplitude is far too large and R²-vs-zero goes sharply
-negative. The overlap is identical across arms so the *differences* are clean, but the levels are
-not comparable to the headline ladder. Raw AUC has no amplitude in it and is free of this.
+**Nothing from the decoupled arm's R² columns is usable — not even the differences.** The
+accepted overlap makes each arm's scale partly in-sample (the calibration killed on 2026-08-02),
+and the bias grows with capacity per training row, so it lands asymmetrically: A's arm is
+unharmed (R² 0.18378 against the main ladder's 0.18316 at INTC calendar 1s) while C's is
+destroyed (−0.25953 against +0.02134). Under permuted labels the construction manufactures an R²
+gap of **+0.062 ± 0.058** out of noise against the main ladder's **+0.010 ± 0.009**. An earlier
+draft claimed the overlap was identical across arms and the differences therefore clean; false
+for R², withdrawn. Raw AUC carries the same permutation null as the main ladder and is
+unaffected — it is the only part of this control that may be quoted.
 
 ### The artifact floor was measured with that channel switched off
 
@@ -134,10 +141,10 @@ Against the worst-window floor, at each rung's own magnitude, raw against raw:
 
 | rung | clean split-only raw AUC | worst-window floor | margin | cells positive |
 |---|---|---|---|---|
-| L3 ridge | +0.0409 | up to +0.0066 | median ~21×, min cell +0.0163 | 16 / 16 |
-| L4 GBM | +0.1913 | up to +0.0383 | median ~**10×**, min cell +0.0657 | **16 / 16** |
+| L3 ridge | +0.0409 | up to +0.0066 | **12.5×** (min cell **7.3×**) | 16 / 16 |
+| L4 GBM | +0.1913 | up to +0.0383 | **8.1×** (min cell **3.4×**) | **16 / 16** |
 
-So L4 survives at roughly **10×** its worst-case floor, not the 98× an earlier version of this table claimed against
+So L4 survives at **8.1×** its worst-case floor (median of per-cell ratios; worst cell 3.4×), not the 98× an earlier version of this table claimed against
 the ceiling-measured floor. **That is the narrowest version of the headline this data supports,
 and it is the one to quote.** L3's is real but thinner: on the confounded `A′` arm its gap was
 positive in only 55 of 80 protocol-C folds and halved when fold 0 was dropped, where L4's was
@@ -210,7 +217,7 @@ it, and **nothing in this study rests on it**.
 | frozen-predictor floor | gap → 0 if the harness is neutral | **FAILS, and that is the finding.** A predictor fitted once and scored unchanged under every protocol still shows A−C of +0.0020 (L1 magnitude) to +0.0153 (L4 magnitude), because A's fold mean approximates the Σy²-weighted pooled metric while C's is unweighted. Every reported gap is now quoted against its own-magnitude floor | 2026-08-02 |
 | calibration slope under A vs C | a leaky protocol should look better calibrated | **FAILS AS A LEAKAGE TEST — the difference is the harness's own calibration design.** Under A the scale's holdout is a random 20% of training rows, exchangeable with A's random test fold, so the slope is driven to ≈1.0 for *any* predictor. A frozen model that cannot leak reproduces A 1.0319 / C 1.3905 to three decimals, and holding the rule constant reverses the ranking for L4. Published as a leakage signature on 2026-08-03 and **withdrawn the same day** | 2026-08-03 |
 | calibration rule held constant, model NOT held constant (`A′`) | if the gap is the split, changing the holdout rule should not move it | **MOVED IT — but the control was confounded.** `Rung.fit` fits the model on the complement of the holdout, so `A′` also took away the model's training tail. It suggested ~48% of L4's gap was the rule. Superseded by the row below | 2026-08-03 |
-| calibration rule held constant, **model held constant** (decoupled arm) | the clean version of the same test | **THE RULE IS WORTH EXACTLY ZERO.** With the raw model fitted on the same seeded random 80% in every arm, the rule moves raw AUC by **0.000000 in all 96 rows** — an identity, since raw AUC never sees the scale. The whole `A′` shrink was the lost training window. Split-only gap: L4 **+0.1913**, L3 +0.0409, unfitted rungs ~0. On R² the rule is worth a median 0.0116 for L4, ~4% | 2026-08-03 |
+| calibration rule held constant, **model held constant** (decoupled arm) | the clean version of the same test | **THE RULE IS WORTH EXACTLY ZERO.** With the raw model fitted on the same seeded random 80% in every arm, the rule moves raw AUC by **0.000000 in all 96 rows** — an identity, since raw AUC never sees the scale. The whole `A′` shrink was the lost training window. Split-only gap: L4 **+0.1913**, L3 +0.0409, unfitted rungs ~0. The arm's R² columns are contaminated by the accepted overlap and are not quoted | 2026-08-03 |
 | AUC gap vs an AUC floor | the gap should clear a floor measured in the same metric | **PASS for L3/L4, FAILS for the unfitted rungs.** On the raw score the gaps are +0.0022 (L1), −0.0018 (L1m), −0.0002 (L2), +0.0409 (L3), +0.1740 (L4). The fitted rungs clear in 16 of 16 cells; the unfitted rungs show no gap at all, and their positive figures in the first draft were the rescale's **sign** flipping AUC to 1−AUC in 27 protocol-C folds. Margins are quoted against the worst-fit-window floor (~7× for L4), not the whole-day one | 2026-08-03 |
 | floor measured at several fit windows | the floor should not depend on where the frozen model was fitted | **IT DOES, AND "WHOLE DAY" IS THE FLATTERING CHOICE.** A whole-day frozen GBM scores AUC ≈0.996 — a ceiling, where two protocols cannot differ much — against ≈0.72 for the rung it bounds. Refit it on half the day and the AUC floor at L4's magnitude grows to +0.0383 in the worst cell, from +0.0045. The margin claimed in the first draft of §1.1a (98×) was that ceiling; the real figure is ~7×. All four windows and their max now ship in `reports/artifact_floor.md` | 2026-08-03 |
 | frozen-scale vs refit-scale floor | a control must be exposed to every channel the thing it controls is exposed to | **THE PUBLISHED FLOOR WAS NOT.** Freezing the scale along with the model hid the calibration channel entirely; refitting it per fold under each protocol's own rule raises the R² floor from +0.0020/+0.0020/+0.0153 to **+0.0043/+0.0112/+0.0192** at L1/L3/L4 magnitudes. Both columns are now printed, and their difference is the channel | 2026-08-03 |
@@ -263,7 +270,7 @@ wrong and the deflated Sharpe is a lie.
 | 18 | 2026-08-03 | Ladder re-run at the identical configuration and seed to emit the calibration slope and directional AUC: **384 fits, +0 trials** | not a new configuration. Same folds, same rungs, same hyperparameters, two extra diagnostics computed from the same predictions; all 384 IC rows and the entire headline R² table reproduce 2026-08-02 exactly, which is the check that the additions changed nothing else. Counting it as 384 new trials would inflate the denominator with fits that searched nothing | yes — +0, logged rather than silent |
 | 19 | 2026-08-03 | Frozen-predictor floor extended to AUC and the calibration slope: **48 fits re-scored, +0 trials** | the numbers it produced were wrong — the scale was frozen with the model, so the floor could not see the calibration channel. Superseded by trial 21 | no — superseded |
 | 20 | 2026-08-03 | **Calibration-rule control (confounded)**: protocol A re-run under C's positional holdout, 2×2×4×6 = **96 fits** | a genuinely new configuration and it counts. It appeared to show ~48% of L4's gap was the calibration rule; superseded by trial 23, which shows the rule also moved the model's training window | yes — **+96**, superseded |
-| 23 | 2026-08-03 | **Clean decoupled control**: raw model fitted on the same seeded random 80% in every arm, only the scale rows moving, 4 arms × 2×2×4×6 = **384 fits** | supersedes trial 20's attribution. With the model held fixed the calibration rule moves raw AUC by **0.000000 in all 96 rows** — an identity, since a rank statistic never sees the scale. Split-only gap: L4 **+0.1913**, L3 +0.0409, unfitted rungs ~0. On R² the rule is worth a median 0.0116 for L4. NOTE the arm's absolute R² levels carry an in-sample-scale artifact by construction and are not quoted | yes — **+384** |
+| 23 | 2026-08-03 | **Clean decoupled control**: raw model fitted on the same seeded random 80% in every arm, only the scale rows moving, 4 arms × 2×2×4×6 = **384 fits** | supersedes trial 20's attribution. With the model held fixed the calibration rule moves raw AUC by **0.000000 in all 96 rows** — an identity, since a rank statistic never sees the scale. Split-only gap: L4 **+0.1913**, L3 +0.0409, unfitted rungs ~0. NOTE the arm's R² columns carry an in-sample-scale artifact by construction — asymmetric, +0.062 ± 0.058 under permuted labels — and are not quoted, differences included | yes — **+384** |
 | 21 | 2026-08-03 | Frozen floors re-measured with the scale refitted per fold under each protocol's own rule, at three magnitudes, both variants: **96 fits, +0 trials** | supersedes trials 14 and 19. R² floors go +0.0020/+0.0020/+0.0153 → +0.0043/+0.0112/+0.0192; the frozen-scale variant is retained beside it, and the difference is the calibration channel | yes — +0 |
 | 22 | 2026-08-03 | `edge.costs.run` switched from the in-sample rescale to the causal one and the cost grid re-run: **216 configurations re-scored, +0 trials** | the same grid, not a new one. Phase 3 had kept the calibration killed for the ladder on 2026-08-02; found by the third red team outside its own scope. **The fitted rungs moved**: L4's INTC calendar 1s break-even 0.0080 → 0.0088, L3's 0.0098 → 0.0100. The causal holdout changes what the raw model is fitted on (80% of training rows, not 100%), not merely the scale — so the first estimate that this was direction-invariant was wrong. **So did 18 of 72 unfitted-rung rows**, the largest being L1m INTC event 5s 0.0256 → 0.0149: the causal scale can come out negative, and with a 0-tick deadband that inverts an unfitted rung's traded direction outright (AMZN event 5s L1 fold 0 goes −0.0173 → +0.0173 gross ticks/trade). A claim that "the unfitted rungs are unchanged, which is the check that nothing else moved" stood here for one revision and was false | yes — +0, numbers corrected |
 

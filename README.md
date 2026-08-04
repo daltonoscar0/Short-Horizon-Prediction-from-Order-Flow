@@ -47,7 +47,7 @@ Three things fall out of that table.
 
    | rung | AUC under A | AUC under C | `A − C` | **clean split-only** | *worst-case floor* | cells positive |
    |---|---|---|---|---|---|---|
-   | L1 `sign(queue imbalance)` | 0.6545 | 0.6573 | +0.0022 | **+0.0023** | *+0.0053* | 13 / 16, below floor |
+   | L1 `sign(queue imbalance)` | 0.6545 | 0.6573 | +0.0022 | **+0.0023** | *+0.0053* | = its own floor |
    | L1m `sign(microprice − mid)` | 0.5880 | 0.5892 | −0.0018 | **−0.0018** | *+0.0053* | — |
    | L2 OLS on OFI | 0.6546 | 0.6567 | −0.0002 | **−0.0002** | *+0.0053* | — |
    | L3 ridge | 0.7811 | 0.7319 | +0.0409 | **+0.0409** | *+0.0066* | **16 / 16** |
@@ -66,7 +66,12 @@ Three things fall out of that table.
    The *floor* is a **frozen** model — fitted once, scored under every protocol with only the
    scale refitted per fold — so it cannot have learned anything from any split. It is quoted at
    the worst of four fit windows, because fitting it on the whole day puts the GBM at an AUC
-   ceiling (~0.996) where two protocols cannot differ much. On that basis L4 clears by **~10×**.
+   ceiling (~0.996) where two protocols cannot differ much. On that basis L4 clears by **8.1×**
+   as a median of per-cell ratios (worst cell 3.4×), and is positive in **80 of 80 folds**.
+
+   L1's row is not a control that passes — its gap and its floor are *the same 16 numbers*,
+   ratio 1.000 in every cell. That is the point: a rung with nothing to fit is indistinguishable
+   from a frozen predictor.
 
    And the gap is not just training-set size: at the last fold, where the two protocols train on
    within 6% of the same number of rows, L4 is still **+0.094**.
@@ -110,7 +115,7 @@ my mind": [`FINDINGS.md`](FINDINGS.md).
 make data       # raw LOBSTER CSVs -> validated event frame + data-quality report
 make features   # -> data/features/*.parquet + the feature x label correlation table
 make selfcheck  # Cont-Kukanov-Stoikov reproduction; fails loudly if the relation breaks
-make test       # 429 tests
+make test       # 435 tests
 
 make ladder     # the optimism table + embargo sensitivity -> reports/ladder.md
 make floors     # the frozen-predictor artifact floor    -> reports/artifact_floor.md

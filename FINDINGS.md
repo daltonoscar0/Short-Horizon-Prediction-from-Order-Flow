@@ -33,8 +33,8 @@ cells, with the same features, rows, folds and seed under every protocol:
 > **The `A − C` column was suspected of bundling a second mechanism. It does not.** A first
 > control (`A′`) attributed about half of L4's gap to the harness's own calibration rule; a
 > clean control built afterwards showed that attribution was itself confounded — with the
-> model's fit rows held fixed the rule is worth **exactly zero** on raw AUC and ~4% of the gap
-> on R². §1.1a carries both controls and the correction.
+> model's fit rows held fixed the rule is worth **exactly zero** on raw AUC. §1.1a carries both
+> controls and the correction.
 
 ### 1.1 The control that makes the table readable — and why L1 was not it
 
@@ -104,8 +104,17 @@ calibrated differently.
 
 **The clean control** (`--holdout-control`, 2026-08-03) fixes that by fitting the raw model on
 the *same seeded random 80%* of each fold's training rows in every arm, and moving only the rows
-the scale is fitted on — accepting that the scale rows then overlap the model's. The overlap is
-identical in every arm, so a difference between arms is the calibration rule and nothing else.
+the scale is fitted on — accepting that the scale rows then overlap the model's.
+
+**That overlap has a cost, and it is not symmetric.** It makes each arm's calibration partly
+in-sample — the artifact killed on 2026-08-02 — and the bias grows with capacity per training
+row, so it lands almost entirely on the walk-forward side: A's arm is unharmed (R² 0.18378
+against the main ladder's 0.18316 at INTC calendar 1s) while C's is destroyed (−0.25953 against
++0.02134). Under permuted labels the construction manufactures an R² gap of **+0.062 ± 0.058**
+out of pure noise, against **+0.010 ± 0.009** for the main ladder. An earlier draft of this
+paragraph said the overlap was identical in every arm and the differences therefore clean; that
+is false for R² and it is withdrawn. **Only the rank columns of this control are usable**, where
+the permutation null is the same as the main ladder's and unbiased.
 
 On raw-score AUC it settles the question exactly, because raw AUC is a rank statistic on the raw
 model and therefore *cannot see the scale at all*. With the model held fixed, the calibration
@@ -114,7 +123,7 @@ than a measurement — and it is the point:
 
 | rung | uncontrolled `A − C` | `A′ − C` (confounded) | **clean split-only** | cells positive |
 |---|---|---|---|---|
-| L1 `sign(queue imbalance)` | +0.0022 | +0.0023 | **+0.0023** | 13 / 16 |
+| L1 `sign(queue imbalance)` | +0.0022 | +0.0023 | **+0.0023** | 13 / 16, = its own floor |
 | L1m `sign(microprice − mid)` | −0.0018 | −0.0018 | **−0.0018** | — |
 | L2 OLS on OFI | −0.0002 | −0.0002 | **−0.0002** | — |
 | L3 ridge, full set | +0.0409 | +0.0283 | **+0.0409** | **16 / 16** |
@@ -126,19 +135,42 @@ cannot have been — with the model held fixed the rule is worth exactly nothing
 of it was the model's lost training window. The split-only gap is **+0.1913**, *larger* than the
 uncontrolled figure, positive in 16 of 16 cells, ranging +0.0657 to +0.3132.
 
-So the bracket collapses, and it collapses toward the **top**: "about half of L4's gap is the
-calibration rule" is withdrawn. On R², where the metric does see amplitude, the rule is worth a
-median of **0.0116** for L4 — roughly 4% of its gap, not 48%. (L3's R² is genuinely
-rule-sensitive at 0.0784, which is why L3 is quoted on AUC below and not on R².)
+So "about half of L4's gap is the calibration rule" is withdrawn. The R² version of the same
+statistic is withdrawn with it: under permuted labels this construction manufactures an R² gap of
++0.062 ± 0.058 out of pure noise (against +0.010 ± 0.009 for the main ladder), and a constant
+predictor scores +0.0082 on it. The decoupled arm's R² columns measure the overlap, not the rule.
+
+**The obvious objection is that the common model-fit rule is itself a free parameter, chosen
+after seeing the old one shrink the gap.** It does not survive a sweep. The same L4 `A − C`
+raw-AUC gap across all 16 cells under six different common model-fit rules (measured by the fifth
+red team, independently):
+
+| common model-fit rule | L4 median gap | min cell | cells positive |
+|---|---|---|---|
+| each protocol's own coupled rule (the headline `A − C`) | +0.1740 | +0.0493 | 16 / 16 |
+| `first 80%` positional — *this is the superseded `A′ − C`* | **+0.1371** | +0.0297 | 16 / 16 |
+| **`random 80%`, seed 0 — the published clean control** | **+0.1913** | +0.0657 | 16 / 16 |
+| `random 80%`, a different seed | +0.1927 | +0.0649 | 16 / 16 |
+| `last 80%` positional | +0.1977 | +0.0672 | 16 / 16 |
+| `all 100%` — no model holdout at all | +0.2010 | +0.0649 | 16 / 16 |
+
+Five of six land at +0.17–+0.20. The *only* rule producing a materially smaller number is the one
+that withholds the day's tail from protocol A — i.e. that removes the adjacency channel under
+study from the arm being measured. Diagnostically, C's level barely moves across rules (0.706 to
+0.717) while A's does (0.9059 headline, 0.8556 under `first 80%`). `A′` was low because it
+crippled A. The narrowest correct statement is therefore a range, not a point:
+**+0.19 to +0.20 under every model-fit rule that does not strip A of its own adjacency**, with
++0.137 reachable only by stripping it. The 80% fraction was swept too (50/80/90/95/99/100%) and
+the residual dependence runs *against* the published number, not for it.
 
 One caveat that must travel with the R² columns of that control table, and it is a familiar one:
 **the overlap makes each arm's scale partly in-sample**, which is the calibration killed on
 2026-08-02, and it bites here exactly as it did then — under the walk-forward arms a
 high-capacity rung's amplitude is far too large and its R²-vs-zero goes sharply negative. The
-overlap is identical across arms so the *differences* are clean, but the absolute R² levels in
-that table are not comparable to the headline ladder and are not quoted anywhere. Raw AUC has no
-amplitude in it and is free of this, which is the third independent reason this project ended up
-quoting a rank metric.
+overlap lands asymmetrically — on the walk-forward side, where capacity per training row is
+highest — so **neither the levels nor the differences of that table are usable**, and none of it
+is quoted. Raw AUC has no amplitude in it and is free of this, which is the third independent
+reason this project ended up quoting a rank metric.
 
 **On directional AUC**, which has no amplitude in it at all — up versus down on the rows the
 deadband calls directional, scored on the **raw** output:
@@ -171,17 +203,22 @@ half the day and the same floor grows several-fold, to +0.0383 in the worst cell
 
 | rung | clean split-only raw AUC | worst-window floor | margin | cells positive |
 |---|---|---|---|---|
-| L3 ridge | +0.0409 | up to +0.0066 | median ~21×, min cell +0.0163 | 16 / 16 |
-| L4 GBM | +0.1913 | up to +0.0383 | median ~**10×**, min cell +0.0657 | **16 / 16** |
+| L3 ridge | +0.0409 | up to +0.0066 | **12.5×** (min cell **7.3×**) | 16 / 16 |
+| L4 GBM | +0.1913 | up to +0.0383 | **8.1×** (min cell **3.4×**) | **16 / 16** |
 
-**L4 survives at roughly 10× its worst-case floor, not the 98× an earlier version of this
-section claimed** against a floor measured at that ceiling. That is capacity-scaling optimism,
+**L4 survives at 8.1× its worst-case floor — median of per-cell ratios, worst cell 3.4× — not the
+98× an earlier version of this section claimed** against a floor measured at that ceiling. That is capacity-scaling optimism,
 confirmed independently of the R² machinery, of the Σy²-weighting artifact, and of the
 calibration rule — and it is the version to quote. What it does **not** support: a five-point
-progression, and it supports L3 far more weakly than L4. On the confounded `A′` arm, L3's gap
-was positive in only 55 of 80 protocol-C folds and halved when fold 0 was dropped, while L4's
-was positive in 79 of 80 and barely moved. The "16 / 16 cells" column is true for both and hides
-that difference; the per-fold columns in `reports/ladder.md` are where it is visible.
+progression, and it supports L3 far more weakly than L4. On the **clean** arm, L4's gap is
+positive in **80 of 80** folds with a worst fold of **+0.0157** and 64/64 excluding fold 0; L3's
+is positive in only **55 of 80**, worst **−0.0829**. The "16 / 16 cells" column is true for both
+and hides that difference entirely. (An earlier draft parked this caveat on the superseded `A′`
+arm; recomputed on the clean one L3 is identical and L4 is slightly better.)
+
+One number that bounds all of this: the per-cell shuffled-label null for the raw-AUC gap has
+**sd ≈ 0.05**, so L4's minimum cell (+0.0657) is only about 1.3 sd from noise. It is the *fold
+count* — 80 of 80 — that carries the result, not any single cell.
 
 An earlier version of this caveat compared L3's *raw* gap against its *rescaled* floor and
 concluded it fell below the floor in 4 of 16 cells. That was the same metric-mismatch the
@@ -467,6 +504,15 @@ Proposed first, per the project's own rules. Each was run, not argued.
 
 Specific results that would flip a specific conclusion.
 
+0. **The gap is intraday burst duplication, and there is now a positive signature pointing that
+   way.** Across protocol-A fold counts k ∈ {2,3,5,10} the raw-AUC gap is essentially **flat**
+   (+0.0650 → +0.0676) while the R² gap rises smoothly. That is what a channel looks like when it
+   *saturates* as soon as each test row has one training neighbour — which is precisely what burst
+   duplication would do, and not what "more training data leaks more" would do. 32% of INTC
+   event-clock stamps sit within 0.5 ms of the previous one. Neither protocol D, nor the fold-4
+   size match, nor any floor in this repo separates that hypothesis from the one §1 argues for.
+   Day-separated folds would; one session cannot. **This is the strongest surviving alternative
+   explanation and it was found by a red team, not by me.**
 1. **Day-separated folds collapse the L4 gap.** If, on twenty sessions with folds cut on day
    boundaries, L4's A−C gap falls to near the frozen-predictor floor, then what this repo
    measured is intraday burst duplication rather than leakage in general, and §1 should be
