@@ -22,7 +22,7 @@ Both tick regimes are carried deliberately: tick size is the single biggest driv
 microstructure features work.
 
 **The alignment invariant.** Orderbook row *k* is the book state *after* message *k*. This is
-asserted, not assumed — `tests/test_alignment.py` fails if it is off by one, and it was
+asserted, not assumed, `tests/test_alignment.py` fails if it is off by one, and it was
 re-verified independently from the raw CSVs during the phase-0 red team (a type-1 bid add at
 message row 102 appears in orderbook row 102 and not 101).
 
@@ -34,8 +34,8 @@ and price difference is converted to **ticks** exactly once, at the point of emi
 Everything is computed on both, and reported on both, because calendar-time results on a
 quiet instrument are partly measuring the clock rather than the market.
 
-- **Calendar** — 100ms grid, feature state as of the last event at or before each stamp.
-- **Event** — every 10 book-changing events (types 1–4; types 5–7 leave the displayed book
+- **Calendar**, 100ms grid, feature state as of the last event at or before each stamp.
+- **Event**, every 10 book-changing events (types 1-4; types 5-7 leave the displayed book
   untouched and do not tick the clock).
 
 Both resolve a stamp to **the last frame row with `ts_ns <= t`**. Event-clock stamps sharing a
@@ -48,18 +48,18 @@ Six family modules, 144 raw columns plus a seasonality-adjusted twin of each non
 (257 total per table). Formulas are in `docs/spec/FEATURES.md`; the module contract is
 `docs/INTERFACE.md`.
 
-- **OFI** — Cont–Kukanov–Stoikov per-event contribution, best level and levels 1–10, over
+- **OFI**, Cont-Kukanov-Stoikov per-event contribution, best level and levels 1-10, over
   100ms/1s/5s lookbacks; depth-scaled multi-level; integrated OFI as the first principal
-  component (Cont–Cucuringu–Zhang).
-- **Queue imbalance** — touch, per level, and depth-weighted under uniform / 1/m / exponential
+  component (Cont-Cucuringu-Zhang).
+- **Queue imbalance**, touch, per level, and depth-weighted under uniform / 1/m / exponential
   weights. `sign(qi_touch)` is baseline L1.
-- **Microprice** — Stoikov (2018), the **iterated** absorbing/transient estimate, not the
+- **Microprice**, Stoikov (2018), the **iterated** absorbing/transient estimate, not the
   first-order term and emphatically not a synonym for weighted mid (see §8).
-- **Trade** — signed volume, counts, effective spread, aggressor sign. LOBSTER gives the
-  direction explicitly, so no Lee–Ready classification is needed.
-- **State** — spread in ticks, depth, book slope, realized volatility, event intensity,
+- **Trade**, signed volume, counts, effective spread, aggressor sign. LOBSTER gives the
+  direction explicitly, so no Lee-Ready classification is needed.
+- **State**, spread in ticks, depth, book slope, realized volatility, event intensity,
   time-of-day bucket.
-- **Labels** — Δmid and Δwmid at 1s/2s/5s/10s plus event-time analogues; classification labels
+- **Labels**, Δmid and Δwmid at 1s/2s/5s/10s plus event-time analogues; classification labels
   with deadband α = **0.5 ticks, frozen by rule**, never tuned.
 
 **Causality.** A feature at stamp `t` may read event rows with `ts_ns <= t` and nothing else.
@@ -67,11 +67,11 @@ Six family modules, 144 raw columns plus a seasonality-adjusted twin of each non
 
 **Fitted statistics refit on a schedule.** PCA loadings, depth normalisers and the microprice
 transition matrices are refit once per 30-minute block on frame rows **strictly before** the
-block start. Block 0 has no prior data and is NaN — 7.69% of stamps, the honest price of a
+block start. Block 0 has no prior data and is NaN, 7.69% of stamps, the honest price of a
 causal fit, reported rather than papered over with a full-sample fallback.
 
 **Normalisation is rolling only.** `rolling_zscore` baselines on `[t-window, t)` in stamp
-positions, strictly excluding `x[t]` — a feature's current draw must not contaminate its own
+positions, strictly excluding `x[t]`, a feature's current draw must not contaminate its own
 baseline. The seasonality control z-scores against *earlier stamps in the same time-of-day
 bucket*, expanding. There is no full-sample scaler anywhere, and a test greps for the patterns
 one leaves behind.
@@ -89,36 +89,36 @@ is enforced by the environment rather than by discipline.
 | **D** *control* | everything outside C's test block, past **and** future | none | none |
 
 - **A − C** is total optimism.
-- **A − D** is fold geometry plus the **temporal adjacency** of training rows — this is where
+- **A − D** is fold geometry plus the **temporal adjacency** of training rows, this is where
   label overlap actually lives, and it is the large term: median +0.2964 R² for L4, which is
   93% of that rung's whole A−C gap.
-- **D − C** is training on the future in blocks *disjoint* from the test set — median +0.0067
+- **D − C** is training on the future in blocks *disjoint* from the test set, median +0.0067
   for L4. Handing a model the whole future, but not the neighbours of the test rows, buys it
   very little. The split is capacity-dependent: for L3 the future is worth 44% of the gap, for
   L4 only 2%. A model with enough capacity to memorise needs a near-duplicate, not the future.
 - **B − C** is the purge/embargo effect **at a walk-forward boundary**, which is near zero for
   an arithmetic reason: purge+embargo can only remove the last `h + E` of a multi-hour
-  training set, 0.6–1.1% of rows.
+  training set, 0.6-1.1% of rows.
 
 **This corrects an earlier labelling.** `B − C` was described as "the label-overlap component"
-and `A − B` as "training on the future outright". Both were wrong, and protocol D — added
-2026-08-02 after the phase-2 red team — is what measures the difference. A near-zero `B − C`
+and `A − B` as "training on the future outright". Both were wrong, and protocol D, added
+2026-08-02 after the phase-2 red team, is what measures the difference. A near-zero `B − C`
 does not license the conclusion that label overlap is unimportant.
 
 **Calibration is causal.** Every rung's raw score is mapped into label units by a
 through-origin scale fitted on a **held-out last 20%** of each fold's training rows (a seeded
-random 20% under A, where training rows are not time-ordered). Fitting it in-sample — as the
-first draft did — returns almost no shrinkage for a high-capacity rung, inflating the
+random 20% under A, where training rows are not time-ordered). Fitting it in-sample, as the
+first draft did, returns almost no shrinkage for a high-capacity rung, inflating the
 out-of-sample amplitude until R²-vs-zero goes sharply negative. That artifact produced every
 large negative protocol-C R² in the earlier ladder, and because it never bites under A, it
 inflated the measured optimism itself.
 
-**The artifact floor is measured, and it is measured like-for-like.** A frozen model — fitted
+**The artifact floor is measured, and it is measured like-for-like.** A frozen model, fitted
 once on the whole day, scored under every protocol with only the per-fold scale refitted, under
-that protocol's own holdout rule — still shows a nonzero A−C gap. Two mechanisms produce it.
+that protocol's own holdout rule, still shows a nonzero A−C gap. Two mechanisms produce it.
 The first is fold aggregation: A's fold mean approximates the `Σy²`-weighted pooled metric while
 C's is an unweighted average over contiguous segments of very unequal `Σy²`. The second is the
-calibration rule itself, and it is the larger of the two — freezing the scale as well as the
+calibration rule itself, and it is the larger of the two, freezing the scale as well as the
 model gives floors of +0.0020/+0.0020/+0.0153 at L1/L3/L4 magnitudes against the like-for-like
 +0.0043/+0.0112/+0.0192. Both columns ship; their difference *is* the calibration channel,
 measured on a predictor that cannot leak. Every headline cell reports the like-for-like floor at
@@ -127,19 +127,19 @@ its own rung's magnitude, and a rung that does not clear it has measured nothing
 **The calibration rule was suspected of being a channel in `A − C`. It is not.** Under A the
 scale's holdout is a random 20% of training rows, exchangeable with A's random test fold; under
 B/C/D it is the last 20% in time, which is not. Re-running A under C's rule (`A′`) shrank L4's
-gap from +0.3173 to +0.1379 and that was published as the rule's contribution — wrongly. `Rung.fit`
+gap from +0.3173 to +0.1379 and that was published as the rule's contribution, wrongly. `Rung.fit`
 fits the model on the *complement* of the calibration holdout, so `A′` also took away the model's
 training tail.
 
 The **clean control** decouples them: the raw model is fitted on the same seeded random 80% of
 each fold's training rows in every arm (`model_mask`), and only the scale rows move. On raw AUC,
 which is a rank statistic on the raw model and therefore cannot see the scale at all, the rule
-then moves the gap by **0.000000 in all 96 rows** — an identity. The whole `A′` shrink was the
+then moves the gap by **0.000000 in all 96 rows**, an identity. The whole `A′` shrink was the
 lost training window. The split-only gap is **+0.1913** for L4, larger than the uncontrolled
-figure. On R² the same statistic is not usable — see the overlap caveat below.
+figure. On R² the same statistic is not usable, see the overlap caveat below.
 
 The cost of that control, stated because it is real: the scale rows now overlap the model rows,
-which makes each arm's calibration partly in-sample — the artifact killed on 2026-08-02. **It is
+which makes each arm's calibration partly in-sample, the artifact killed on 2026-08-02. **It is
 not symmetric.** The bias grows with capacity per training row, and C trains on a fraction of A's,
 so it lands almost entirely on the walk-forward side (A's R² unharmed at 0.18378, C's destroyed at
 −0.25953 on INTC calendar 1s). Under permuted labels the construction manufactures an R² gap of
@@ -158,7 +158,7 @@ reported.
 additional serial-correlation window. E = max(60s, 10h), with a sensitivity sweep.
 
 **All three protocols are scored on the same rows.** The walk-forward protocols reserve
-segment 0 as initial training data, so A is restricted to testing the same universe — otherwise
+segment 0 as initial training data, so A is restricted to testing the same universe, otherwise
 A would additionally be tested on the market open, the most volatile part of the session, and
 that difference would be charged to leakage. A still *trains* on everything outside its test
 fold, because that is what shuffled k-fold does.
@@ -167,7 +167,7 @@ fold, because that is what shuffled k-fold does.
 one below it, which means nothing if the rungs see different samples.
 
 The adversarial tests were written **before** the splitter, and include a deliberately broken
-splitter that the leak detector is asserted to catch — a leak detector that has never caught a
+splitter that the leak detector is asserted to catch, a leak detector that has never caught a
 leak is a comment.
 
 ## 5. The ladder
@@ -176,7 +176,7 @@ leak is a comment.
 |---|---|---|
 | **L0** | zero predictor | none |
 | **L1** | `sign(queue imbalance)`, `sign(microprice − mid)` | none |
-| **L2** | OLS of Δmid on best-level OFI (Cont–Kukanov–Stoikov) | 2 |
+| **L2** | OLS of Δmid on best-level OFI (Cont-Kukanov-Stoikov) | 2 |
 | **L3** | ridge on the handcrafted set, standardiser fit per fold on training rows only | 28 |
 | **L4** | gradient boosting on the same set, 200 rounds, no early stopping | many |
 
@@ -188,7 +188,7 @@ control is the frozen predictor described in §4.
 Every rung's raw score is mapped into label units by one through-origin scale, fitted on a
 held-out slice of the training rows (§4). For least-squares rungs it is close to 1.0 (residuals
 are orthogonal to fitted values in-sample), so it does little for L2/L3 and mainly puts L1 and
-L4 on a comparable footing. Being rank-preserving, it never changes the IC — which is why the
+L4 on a comparable footing. Being rank-preserving, it never changes the IC, which is why the
 IC columns are the ones immune to the calibration artifact, and why the surviving result is
 stated on IC.
 
@@ -201,12 +201,12 @@ carving a validation slice out of training is one more free parameter to log.
   the model the test set's own average return; on a near-zero-mean series the two are
   numerically close, which is exactly why the mistake survives review. The leaky variant is
   computed alongside purely to show the size of the gap.
-- **Information coefficient** — Spearman ρ per fold, hand-written rank transform.
-- **Classification** — balanced accuracy and MCC, always printed next to the base rate. At 1s
+- **Information coefficient**, Spearman ρ per fold, hand-written rank transform.
+- **Classification**, balanced accuracy and MCC, always printed next to the base rate. At 1s
   ~96% of INTC labels are flat, so plain accuracy is meaningless. Read balanced accuracy and MCC
   on the unfitted rungs as *null*: a rescaled sign predictor never clears the 0.5-tick deadband,
   so its predicted class is always 0, balanced accuracy is exactly 1/3 and MCC is NaN.
-- **AUC on the directional subset** — up versus down on the rows the deadband calls
+- **AUC on the directional subset**, up versus down on the rows the deadband calls
   directional, flats excluded. Pooling the flats into the negative class would make AUC a
   function of tie mass rather than of skill, which is the axis error the phase-1 red team caught
   in the correlation table; under this definition 0.5 is chance in every cell. A one-sided test
@@ -215,9 +215,9 @@ carving a validation slice out of training is one more free parameter to log.
   for the unfitted rungs, and it is the metric the capacity result is restated on
   (`FINDINGS.md` §1.1a). **Quote the raw-score column.** The through-origin rescale is
   rank-preserving only *up to sign*, the fitted scale goes negative in 27 of 400 protocol-C
-  folds and 0 of 400 protocol-A folds, and a negative scale sends AUC to 1−AUC — which is what
+  folds and 0 of 400 protocol-A folds, and a negative scale sends AUC to 1−AUC, which is what
   produced the unfitted rungs' apparent A−C gap in the first draft of that section.
-- **Calibration slope** — the slope of realized on predicted, per fold. `EVAL_PROTOCOL.md` §2
+- **Calibration slope**, the slope of realized on predicted, per fold. `EVAL_PROTOCOL.md` §2
   asks for it because R² and IC cannot separate a model that is directionally right but too
   loud from one that is simply wrong. **Do not read its A-versus-C difference as leakage.**
   Under A the scale's holdout is exchangeable with A's test fold, so the slope is driven to ≈1.0
@@ -234,7 +234,7 @@ misleading one, and §4 exists to establish which protocol to believe.
 
 **The decision sequence.** Signal formed at `t` from information ≤ `t`; earliest action at
 `t + Δ` for Δ ∈ {1ms, 10ms, 100ms}; position closed at `t + Δ + h`. The entry price is read at
-`t + Δ`, which is the whole point of the latency ladder — a signal whose edge is gone by 100ms
+`t + Δ`, which is the whole point of the latency ladder, a signal whose edge is gone by 100ms
 is latency arbitrage, not alpha.
 
 **Fills are aggressive**: buy crosses to the ask, sell to the bid, so a round trip pays the
@@ -244,13 +244,13 @@ archived price list.
 
 **Position discipline.** Single unit of 100 shares, no inventory, flat at horizon. Decisions
 are spaced at least `Δ + h` apart, greedily from the earliest eligible stamp, and **the spacing
-watermark carries across fold boundaries** — resetting it per fold let 4 positions on INTC
-calendar 1s open 800–1000ms apart against a required 1001ms. Direction is the sign of the
+watermark carries across fold boundaries**, resetting it per fold let 4 positions on INTC
+calendar 1s open 800-1000ms apart against a required 1001ms. Direction is the sign of the
 prediction; the deadband is 0 (see §9).
 
 **The break-even column is computed on the GROSS (mid-to-mid) series**, so it reports the total
 per-side cost the signal can bear, inclusive of everything. The earlier draft computed it on
-the net series, making it *incremental* to a spread already crossed — which made it nearly
+the net series, making it *incremental* to a spread already crossed, which made it nearly
 model-invariant, since an always-on strategy loses almost exactly the spread whatever it
 predicts. The 2026-08-02 red team demonstrated this by scoring a constant always-long predictor
 *inside* the ladder's range. The incremental column is retained and demoted rather than
@@ -258,12 +258,12 @@ deleted, because removing the number an earlier draft led with would hide the co
 
 **Controls ship as rows**, on identical rows, folds, mask and fills: always-long, always-short,
 and a perfect-foresight **oracle** that trades the realised sign of the move. The oracle is a
-bound, not a rung — it reads the future by construction, and its feature list says so. It is
+bound, not a rung, it reads the future by construction, and its feature list says so. It is
 the most informative row in the table: it still loses money.
 
 **Inferential statistics.** Circular block bootstrap (block length ≥ the label horizon in
-stamps) for CIs on the **mean per trade** — an earlier draft printed that interval beside the
-*total* PnL, off by a factor of `n_trades`. Diebold–Mariano between adjacent rungs on per-trade
+stamps) for CIs on the **mean per trade**, an earlier draft printed that interval beside the
+*total* PnL, off by a factor of `n_trades`. Diebold-Mariano between adjacent rungs on per-trade
 gross PnL, with loss `= −gross ticks` (squaring a PnL would test whether one rung's PnL is
 larger in *magnitude*, which is the wrong hypothesis) and a HAC lag equal to the block length.
 Deflated Sharpe on the **gross** series at n = 2,536 trials: on the net series every rung has a
@@ -276,7 +276,7 @@ Eleven red-team passes ran against the artifacts, read-only. They are
 in `reports/adversary/`. The findings that changed code:
 
 - **The in-sample calibration was inflating the phase-2 headline** (§4). Every large negative
-  protocol-C R² was an artifact of it, and most reported gaps shrank by 20–95% once the scale
+  protocol-C R² was an artifact of it, and most reported gaps shrank by 20-95% once the scale
   was fitted causally. The superseded columns are retained in `reports/ladder.md`.
 - **`B − C` was labelled with the wrong mechanism** (§4). Protocol D was added to separate
   "saw the future" from "saw the neighbours of the test rows"; the second is much larger.
@@ -292,7 +292,7 @@ in `reports/adversary/`. The findings that changed code:
 - **`mp_micro` was Stoikov's first-order term G¹, not the microprice.** The landing matrix
   B = (I−Q)⁻¹R₂ was never built and the outer recursion G⁽ⁱ⁺¹⁾ = G¹ + B·G⁽ⁱ⁾ never ran. Both
   added. The recursion does **not** converge on this data (|eig(B)| = 0.9906, drift −0.018
-  ticks/iteration), so `MICRO_ITERS = 6` is part of the feature's *definition*, not a cap —
+  ticks/iteration), so `MICRO_ITERS = 6` is part of the feature's *definition*, not a cap -
   `mp_micro` is honestly "the six-step microprice".
 - **The event clock violated its own `<= t` contract** on 10.48% of INTC stamps, putting a mid
   move that elapsed in *zero wall-clock time* inside `label_y_mid_*`.
@@ -328,7 +328,7 @@ including NaN placement.
 
 - **One trading day, two names.** Fold boundaries are intraday blocks; the "split on day
   boundaries first" rule in the protocol is unavailable, and the same-day-vs-next-day leak
-  check **cannot be run at all** — recorded as unavailable, not as passed.
+  check **cannot be run at all**, recorded as unavailable, not as passed.
 - **2012 data vintage.** Market structure has moved on; these are not present-day numbers.
 - **The Nasdaq fee schedule is an assumption**, not a verified citation (§ `reports/costs.md`).
 - **No market impact model.** Stated, not omitted; ignoring impact biases PnL upward.
@@ -336,7 +336,7 @@ including NaN placement.
   `passive_round_trip_pnl` are unit-tested but never called in the headline path, so the
   "walk the book beyond displayed size" claim is untested against real data.
 - **The DM tests are indicative, not decisive.** Adjacent rungs are largely nested, where
-  standard Diebold–Mariano is undersized; §2 of the protocol asks for the Giacomini–White
+  standard Diebold-Mariano is undersized; §2 of the protocol asks for the Giacomini-White
   variant, which is not implemented.
 - **The calibration slope is reported but unstable per cell** (2026-08-03). Its denominator is
   the prediction's variance, so a low-variance fold sends the slope to ±40; the medians are

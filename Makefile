@@ -1,5 +1,5 @@
 # Phase 0: raw LOBSTER CSVs -> validated event frame. `make test` must run clean from a
-# fresh checkout with only the declared deps (no `pip install -e .` step) — src is put on
+# fresh checkout with only the declared deps (no `pip install -e .` step), src is put on
 # PYTHONPATH directly, per DECISIONS.md.
 RAW_DIR ?= data/raw/lobster
 OUT_DIR ?= data/frames
@@ -10,10 +10,10 @@ SEED ?= 0
 # Plain `python3` is preferred as-is (a normal single-interpreter checkout needs nothing
 # else). On this dev machine specifically, `python3` can resolve ahead of the environment
 # that actually has the declared deps depending on shell/login mode (macOS path_helper vs.
-# conda's PATH prepend order — see DECISIONS.md), landing on an interpreter without pyarrow.
+# conda's PATH prepend order, see DECISIONS.md), landing on an interpreter without pyarrow.
 # Fall back to known-good interpreters only if the first choice can't import the deps; this is
 # a no-op everywhere except this specific quirk. `.venv-edge` leads because it is the only
-# candidate this repo can create for itself — the anaconda install this project was developed
+# candidate this repo can create for itself, the anaconda install this project was developed
 # against disappeared from the machine mid-session on 2026-08-03, which is exactly the failure
 # this probe exists to survive. Every candidate is PROBED, never assumed: a missing
 # interpreter falls through instead of failing the target.

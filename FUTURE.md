@@ -1,4 +1,4 @@
-# FUTURE — what this harness is for next
+# FUTURE, what this harness is for next
 
 Ordered by what would change a conclusion, not by what would be fun. Everything here is a
 follow-up *against this harness*: the point of building the splitter first is that a new arm
@@ -6,7 +6,7 @@ is a new rung, not a new project.
 
 ---
 
-## 1. More days, then more names — in that order
+## 1. More days, then more names, in that order
 
 **Why first.** Every number in this repo comes from one session, 2012-06-21. `EVAL_PROTOCOL.md`
 sec. 1 says to split on day boundaries and fall back to intraday blocks only if more folds are
@@ -15,29 +15,29 @@ the harness can fix:
 
 - The **same-day vs next-day leak check cannot be run at all**. It is recorded as unavailable,
   not as passed. It is the check most likely to find something the intraday checks cannot.
-- The A→C optimism gap is measured across five intraday blocks of one day. Whether it is a
+- The A->C optimism gap is measured across five intraday blocks of one day. Whether it is a
   property of *this literature's protocol* or of *this Thursday* is not decidable from here.
 
 **The scope-discipline rule (RULES.md rule 6) says one axis at a time.** Days first: the same
 two names, twenty sessions, folds cut on day boundaries. Only then more names.
 
-**What would change my mind:** if the A→C gap on L4 collapses from ~0.49 to near zero once
+**What would change my mind:** if the A->C gap on L4 collapses from ~0.49 to near zero once
 folds are day-separated, then what this repo measured is intraday burst duplication, not label
 overlap in general, and the headline should say so.
 
 ## 2. The order-flow LM arm
 
-Cut from this project because no trained checkpoint exists — `orderflow-lm` stops at
+Cut from this project because no trained checkpoint exists, `orderflow-lm` stops at
 tokenization. This was the original motivation and it is the natural next arm.
 
 It slots in as **L5** (handcrafted + LM states) and **L6** (LM states alone), with the three
 controls `docs/spec/PLAN.md` already specifies and which are non-negotiable:
 
-- **untrained control** — identical architecture, random weights, same pooling. If L5 ≈
+- **untrained control**, identical architecture, random weights, same pooling. If L5 ≈
   untrained-L5, the gain is a random projection of recent history.
-- **lag control** — raw lagged features over the identical lookback window the LM sees. The LM
+- **lag control**, raw lagged features over the identical lookback window the LM sees. The LM
   must beat naive memory, not just the contemporaneous snapshot.
-- **dimension control** — the handcrafted model given the same number of random-projection
+- **dimension control**, the handcrafted model given the same number of random-projection
   features, so a win is not parameter count.
 
 **The leak that matters more than the result.** `EVAL_PROTOCOL.md` sec. 4 is explicit: if the
@@ -47,14 +47,14 @@ that on day one of that phase, not after a good number arrives. A checkpoint tra
 
 ## 3. Close the gaps this project logged rather than fixed
 
-These are known, recorded, and small — but they are places a silent regression could land.
+These are known, recorded, and small, but they are places a silent regression could land.
 
 - **Per-column literal tests.** Every formula and every mutation the audits could construct is
   covered, but roughly 35 `ofi_l{m}_{w}` level×window cells, 12 `label_*` columns at the
   2s/5s/10s horizons and 5 `st_*` columns are pinned only structurally. Five `st_*` columns
   survive replacement by zeros, which means no test currently depends on their values.
 - ~~**Calibration slope is computed but not reported.**~~ **Done 2026-08-03**, together with
-  AUC — and reporting them is what exposed the errors described in `FINDINGS.md` §1.1a: the
+  AUC, and reporting them is what exposed the errors described in `FINDINGS.md` §1.1a: the
   artifact floor was measured with the calibration channel frozen, and two successive attempts
   to decompose that channel were themselves wrong. A first reading of the slope as a leakage
   signature was published and withdrawn the same day; it is mechanically forced by the
@@ -65,12 +65,12 @@ These are known, recorded, and small — but they are places a silent regression
   quotable and a trimmed or variance-weighted aggregation would make the per-cell column
   readable. And **the AUC floor is small on this data for reasons that will not transfer.**
   Protocol A's per-fold AUC is a whole-day pooled AUC while C's is a within-block AUC, so any
-  frozen score with a time-varying offset drives the two apart with nothing refitted — the red
+  frozen score with a time-varying offset drives the two apart with nothing refitted, the red
   team reached −0.137 that way. Separately, the floor depends on where the frozen model is
   fitted, and at L4's magnitude a whole-day fit sits at an AUC ceiling (~0.996) where two
   protocols cannot differ; the floor is now maximised over four fit windows for that reason.
   Both must be re-measured on any new data rather than assumed. See §7.
-- **Giacomini–White for nested rungs.** The DM tests between adjacent rungs are reported and
+- **Giacomini-White for nested rungs.** The DM tests between adjacent rungs are reported and
   flagged as indicative: adjacent rungs are largely nested (L3's feature set contains L2's) and
   standard DM is undersized there. The conditional GW variant is the correct test and is not
   implemented.
@@ -88,7 +88,7 @@ These are known, recorded, and small — but they are places a silent regression
 
 López de Prado ch. 12. Gives a *distribution* of backtest paths rather than one walk-forward
 path, which is the right way to ask whether the C-protocol ladder ordering is stable or is one
-draw. Keep plain walk-forward as the primary — it is the protocol every reader knows — and add
+draw. Keep plain walk-forward as the primary, it is the protocol every reader knows, and add
 CPCV as the "and I also did", never as the headline.
 
 ## 5. Regime splits, once there is enough data to split
@@ -104,7 +104,7 @@ phase-1 red team measured that OFI's content decays inside 100 ms, and the cost 
 that even perfect foresight of the 1-second mid move loses money once the spread is crossed.
 That combination means the honest ladder here is a statement about *prediction*, not about a
 tradable strategy. A version of this project aimed at tradability would need passive fills,
-queue position, and a horizon chosen by where the signal actually lives — which is a different
+queue position, and a horizon chosen by where the signal actually lives, which is a different
 project, and should be labelled one.
 
 ## 7. What the calibration control left open
@@ -118,7 +118,7 @@ attribution it replaced was withdrawn. `FINDINGS.md` §1.1a.
 What it left open:
 
 - **The overlap has a price.** The scale rows now overlap the model rows, so each arm's
-  calibration is partly in-sample — the artifact killed on 2026-08-02 — and the arm's absolute R²
+  calibration is partly in-sample, the artifact killed on 2026-08-02, and the arm's absolute R²
   levels go sharply negative under the walk-forward arms. Only differences are usable, and only
   the rank-metric columns are quoted. A control that avoided the overlap *and* held the model
   fixed would need a third row set, i.e. a smaller effective training sample in every arm; whether

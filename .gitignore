@@ -5,3 +5,11 @@ __pycache__/
 .venv-edge/
 scratch/
 reports/feature_correlations.csv
+CLAUDE.md
+AGENTS.md
+.claude/
+.agentnotes/
+.cursor/
+.mcp.json
+tasks/lessons.md
+tasks/todo.md

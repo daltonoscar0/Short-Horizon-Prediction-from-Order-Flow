@@ -7,14 +7,14 @@
 ## Stated assumptions
 
 - **Fills are aggressive.** Buying crosses to the ask, selling to the bid, so a round trip pays the FULL spread plus two take fees. Pessimistic by design.
-- **Fees**: $0.0030/share to take, $0.0020/share make rebate — the commonly-quoted 2012 Nasdaq standard rates, entered as an ASSUMPTION and *not* verified against an archived price list. The break-even table is the answer to anyone who disagrees: it reports the cost at which PnL crosses zero, so a reader can substitute their own.
+- **Fees**: $0.0030/share to take, $0.0020/share make rebate, the commonly-quoted 2012 Nasdaq standard rates, entered as an ASSUMPTION and *not* verified against an archived price list. The break-even table is the answer to anyone who disagrees: it reports the cost at which PnL crosses zero, so a reader can substitute their own.
 - **No market impact model.** Stated, not omitted. Ignoring impact biases PnL UPWARD; the break-even table partially absorbs this.
-- **Position**: single unit of 100 shares, no inventory, flat at the horizon. Direction is the SIGN of the prediction — **the deadband is 0**, not the labels' 0.5 ticks. A scaled sign predictor cannot emit a magnitude above half a tick at these horizons, so a 0.5-tick trading threshold took zero trades on every unfitted rung. That change was made after seeing an empty table, which makes it a choice informed by protocol-C output; it is logged in `DECISIONS.md` and the reasoning is a-priori, but it is disclosed here rather than presented as frozen.
-- **Latency**: the signal formed at t acts at t+delta. A signal whose edge is gone by 100ms is latency arbitrage, not alpha — and the phase-1 red team measured that OFI's content decays inside 100ms, so the 100ms rung is expected to be brutal.
+- **Position**: single unit of 100 shares, no inventory, flat at the horizon. Direction is the SIGN of the prediction, **the deadband is 0**, not the labels' 0.5 ticks. A scaled sign predictor cannot emit a magnitude above half a tick at these horizons, so a 0.5-tick trading threshold took zero trades on every unfitted rung. That change was made after seeing an empty table, which makes it a choice informed by protocol-C output; it is logged in `DECISIONS.md` and the reasoning is a-priori, but it is disclosed here rather than presented as frozen.
+- **Latency**: the signal formed at t acts at t+delta. A signal whose edge is gone by 100ms is latency arbitrage, not alpha, and the phase-1 red team measured that OFI's content decays inside 100ms, so the 100ms rung is expected to be brutal.
 
 ## What the headline column is, and what it is not
 
-**`be total (ticks)` is the headline.** It is computed on the GROSS (mid-to-mid) series, so it is the total per-share, per-side cost the signal can bear before it stops paying — inclusive of every cost, which is what lets a reader who rejects the assumed fee schedule substitute their own number.
+**`be total (ticks)` is the headline.** It is computed on the GROSS (mid-to-mid) series, so it is the total per-share, per-side cost the signal can bear before it stops paying, inclusive of every cost, which is what lets a reader who rejects the assumed fee schedule substitute their own number.
 
 **`be incr (ticks)` is the old headline and it is nearly model-invariant.** It is computed on the NET series, so it reports the cost *on top of* a spread already crossed and a fee already paid, and for an always-on strategy that is dominated by the spread. The `CTRL always long` / `CTRL always short` rows are in the table for exactly this reason: the constant controls land INSIDE the ladder's range on that column, so it cannot answer PLAN.md's question. It is retained, demoted, because deleting a column the earlier draft led with would hide the correction.
 
@@ -22,7 +22,7 @@
 
 ## Break-even cost table
 
-Negative means underwater — reported, not clipped. `gross t/trade` is the column that discriminates between rungs; it carries a block-bootstrap CI and the worst of the five folds beside it, per RULES.md rule 4.
+Negative means underwater, reported, not clipped. `gross t/trade` is the column that discriminates between rungs; it carries a block-bootstrap CI and the worst of the five folds beside it, per RULES.md rule 4.
 
 | ticker | clock | h | rung | latency | trades | gross t/trade | gross CI lo | gross CI hi | worst fold | be total (ticks) | net PnL $ | mean PnL/trade $ | mean CI lo | mean CI hi | be incr (ticks) | be incr (bps) | DSR gross |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -316,7 +316,7 @@ No pooled number travels alone (RULES.md rule 4). Reference latency only.
 
 ## Diebold-Mariano between adjacent rungs (gross PnL per trade)
 
-Loss is `-gross ticks`, so a NEGATIVE statistic means the upper rung earns more. Paired on the trades both rungs took; HAC lag = the bootstrap block length. Adjacent rungs are largely NESTED (L3's feature set contains L2's) and standard DM is undersized there, so read these as indicative, not decisive — `EVAL_PROTOCOL.md` sec. 2 asks for the Giacomini-White variant, which is not implemented.
+Loss is `-gross ticks`, so a NEGATIVE statistic means the upper rung earns more. Paired on the trades both rungs took; HAC lag = the bootstrap block length. Adjacent rungs are largely NESTED (L3's feature set contains L2's) and standard DM is undersized there, so read these as indicative, not decisive, `EVAL_PROTOCOL.md` sec. 2 asks for the Giacomini-White variant, which is not implemented.
 
 | ticker | clock | h | upper | lower | n | mean diff (ticks) | DM stat | p |
 |---|---|---|---|---|---|---|---|---|
@@ -357,6 +357,6 @@ Loss is `-gross ticks`, so a NEGATIVE statistic means the upper rung earns more.
 
 - **The confidence intervals are on the MEAN per trade**, which is what a block bootstrap of a mean returns. An earlier draft printed them beside the TOTAL PnL, where they were off by a factor of `n_trades` in every row.
 - Both intervals are circular block bootstraps with block length >= the label horizon; resampling individual trades would ignore the serial dependence that makes the naive interval far too narrow.
-- **The DSR is on the GROSS series.** On the net series every rung has a Sharpe near -7.6 (it loses the spread almost deterministically), and the DSR is 0.000 at every trial count from 1 to 1e12 — a tautology rather than a finding. Deflation only means something where there is something to deflate.
+- **The DSR is on the GROSS series.** On the net series every rung has a Sharpe near -7.6 (it loses the spread almost deterministically), and the DSR is 0.000 at every trial count from 1 to 1e12, a tautology rather than a finding. Deflation only means something where there is something to deflate.
 - **Trade counts differ across rungs only where a prediction is exactly zero**, not because of a deadband (there isn't one). The decision set comes from the stamp vector, so every rung trades at identical times; `qi_touch == 0` on 10.5% of AMZN calendar stamps (bid size exactly equal to ask size) is the whole of the gap.
 - **Net PnL is not comparable across latency rows on the event clock**, where the decision set itself shifts with latency. The per-trade columns are the comparable ones.
