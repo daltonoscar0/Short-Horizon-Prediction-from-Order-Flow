@@ -1,5 +1,7 @@
 # Edge
 
+[![tests](https://github.com/daltonoscar0/Short-Horizon-Prediction-from-Order-Flow/actions/workflows/tests.yml/badge.svg)](https://github.com/daltonoscar0/Short-Horizon-Prediction-from-Order-Flow/actions/workflows/tests.yml)
+
 **How much of the published short-horizon LOB prediction performance is an artifact of leaky
 cross-validation?**
 

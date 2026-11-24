@@ -1,0 +1,37 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # numpy and pyarrow are the declared dependencies.
+      #
+      # lightgbm is NOT declared in pyproject.toml but is genuinely needed:
+      # src/edge/harness/models.py:275 imports it for the L4 rung of the
+      # ladder. It is imported lazily, so most of the codebase works without
+      # it, but 6 tests error out. Installed here so the full suite runs; see
+      # the PR for the suggestion to declare it (or to skip those tests when
+      # it is absent, which is what the Makefile's "only the declared deps"
+      # comment implies was intended).
+      - name: Install dependencies
+        run: pip install "numpy>=1.24" "pyarrow>=14.0" lightgbm
+
+      # The repo's own target: unittest discovery over tests/, with src put on
+      # PYTHONPATH directly rather than `pip install -e .`, per DECISIONS.md.
+      # Needs no data: the Phase 0 targets that read raw LOBSTER CSVs are
+      # separate.
+      - name: Run tests
+        run: make test
