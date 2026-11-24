@@ -238,3 +238,7 @@ and no trained checkpoint exists, so there was nothing to probe; the arm was cut
 faked, and the phase renumbering is recorded in `DECISIONS.md` (2026-07-31). If a checkpoint
 ever exists it becomes a follow-up arm against this harness, which is the point of having
 built the harness first, see [`FUTURE.md`](FUTURE.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
